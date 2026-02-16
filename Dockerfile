@@ -17,9 +17,15 @@ COPY scripts/ scripts/
 # Install all deps (including devDependencies for build)
 RUN npm ci
 
-# Copy source and build
+# Copy source and build configs
 COPY tsconfig.json tsup.config.ts ./
 COPY src/ src/
+
+# Copy frontend source and install its deps
+COPY web/ web/
+RUN cd web && npm ci
+
+# Build everything: SDK → backend (tsup) → frontend (vite)
 RUN npm run build
 
 # ---- Runtime stage ----
@@ -37,14 +43,11 @@ RUN apt-get update && apt-get install -y \
 # Copy package files and install production deps only
 COPY package.json package-lock.json ./
 COPY scripts/ scripts/
-RUN npm ci --omit=dev --ignore-scripts \
+RUN npm ci --omit=dev \
     && bash scripts/patch-gramjs.sh || true \
     && npm cache clean --force
 
-# Install playwright chromium (for market scraper)
-RUN npx playwright install --with-deps chromium
-
-# Remove build tools (no longer needed)
+# Remove build tools (no longer needed after native compilation)
 RUN apt-get purge -y python3 make g++ && apt-get autoremove -y
 
 # Copy compiled code, bin wrapper, and templates
@@ -59,6 +62,9 @@ VOLUME /data
 # Run as non-root
 RUN chown -R node:node /app
 USER node
+
+# WebUI port (when enabled)
+EXPOSE 7777
 
 ENTRYPOINT ["node", "dist/cli/index.js"]
 CMD ["start"]

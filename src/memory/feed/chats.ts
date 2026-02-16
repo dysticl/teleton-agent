@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import type { TgChatRow } from "../types/db-rows.js";
 
 export interface TelegramChat {
   id: string;
@@ -14,15 +15,9 @@ export interface TelegramChat {
   updatedAt: Date;
 }
 
-/**
- * Manage Telegram chats (DMs, groups, channels)
- */
 export class ChatStore {
   constructor(private db: Database.Database) {}
 
-  /**
-   * Create or update a chat
-   */
   upsertChat(chat: Partial<TelegramChat> & { id: string; type: string }): void {
     const now = Math.floor(Date.now() / 1000);
 
@@ -58,9 +53,6 @@ export class ChatStore {
       );
   }
 
-  /**
-   * Get a chat by ID
-   */
   getChat(id: string): TelegramChat | undefined {
     const row = this.db
       .prepare(
@@ -68,28 +60,25 @@ export class ChatStore {
       SELECT * FROM tg_chats WHERE id = ?
     `
       )
-      .get(id) as any;
+      .get(id) as TgChatRow | undefined;
 
     if (!row) return undefined;
 
     return {
       id: row.id,
-      type: row.type,
-      title: row.title,
-      username: row.username,
-      memberCount: row.member_count,
+      type: row.type as TelegramChat["type"],
+      title: row.title ?? undefined,
+      username: row.username ?? undefined,
+      memberCount: row.member_count ?? undefined,
       isMonitored: Boolean(row.is_monitored),
       isArchived: Boolean(row.is_archived),
-      lastMessageId: row.last_message_id,
+      lastMessageId: row.last_message_id ?? undefined,
       lastMessageAt: row.last_message_at ? new Date(row.last_message_at * 1000) : undefined,
       createdAt: new Date(row.created_at * 1000),
       updatedAt: new Date(row.updated_at * 1000),
     };
   }
 
-  /**
-   * Get active (monitored, non-archived) chats
-   */
   getActiveChats(limit: number = 50): TelegramChat[] {
     const rows = this.db
       .prepare(
@@ -100,26 +89,23 @@ export class ChatStore {
       LIMIT ?
     `
       )
-      .all(limit) as any[];
+      .all(limit) as TgChatRow[];
 
     return rows.map((row) => ({
       id: row.id,
-      type: row.type,
-      title: row.title,
-      username: row.username,
-      memberCount: row.member_count,
+      type: row.type as TelegramChat["type"],
+      title: row.title ?? undefined,
+      username: row.username ?? undefined,
+      memberCount: row.member_count ?? undefined,
       isMonitored: Boolean(row.is_monitored),
       isArchived: Boolean(row.is_archived),
-      lastMessageId: row.last_message_id,
+      lastMessageId: row.last_message_id ?? undefined,
       lastMessageAt: row.last_message_at ? new Date(row.last_message_at * 1000) : undefined,
       createdAt: new Date(row.created_at * 1000),
       updatedAt: new Date(row.updated_at * 1000),
     }));
   }
 
-  /**
-   * Update last message info
-   */
   updateLastMessage(chatId: string, messageId: string, timestamp: Date): void {
     this.db
       .prepare(
@@ -132,9 +118,6 @@ export class ChatStore {
       .run(messageId, Math.floor(timestamp.getTime() / 1000), chatId);
   }
 
-  /**
-   * Archive a chat
-   */
   archiveChat(chatId: string): void {
     this.db
       .prepare(
@@ -147,9 +130,6 @@ export class ChatStore {
       .run(chatId);
   }
 
-  /**
-   * Unarchive a chat
-   */
   unarchiveChat(chatId: string): void {
     this.db
       .prepare(
@@ -162,9 +142,6 @@ export class ChatStore {
       .run(chatId);
   }
 
-  /**
-   * Set monitoring status
-   */
   setMonitored(chatId: string, monitored: boolean): void {
     this.db
       .prepare(

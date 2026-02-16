@@ -5,11 +5,12 @@ import {
   EMBEDDING_CACHE_MAX_ENTRIES,
   EMBEDDING_CACHE_TTL_DAYS,
   EMBEDDING_CACHE_EVICTION_INTERVAL,
+  EMBEDDING_CACHE_EVICTION_RATIO,
 } from "../../constants/limits.js";
 
 /**
  * Caching decorator for any EmbeddingProvider.
- * Transparently caches embeddings in SQLite (embedding_cache table).
+ * Transparently caches embeddings in SQLite.
  */
 export class CachedEmbeddingProvider implements EmbeddingProvider {
   readonly id: string;
@@ -95,7 +96,6 @@ export class CachedEmbeddingProvider implements EmbeddingProvider {
       }
     }
 
-    // Fetch misses from inner provider
     if (missTexts.length > 0) {
       const newEmbeddings = await this.inner.embedBatch(missTexts);
 
@@ -137,17 +137,15 @@ export class CachedEmbeddingProvider implements EmbeddingProvider {
     if (this.ops % EMBEDDING_CACHE_EVICTION_INTERVAL !== 0) return;
 
     try {
-      // TTL eviction: delete entries older than TTL_DAYS
       const cutoff = Math.floor(Date.now() / 1000) - EMBEDDING_CACHE_TTL_DAYS * 86400;
       this.db.prepare(`DELETE FROM embedding_cache WHERE accessed_at < ?`).run(cutoff);
 
-      // Size eviction: if over max, delete oldest 10%
       const count = (
         this.db.prepare(`SELECT COUNT(*) as cnt FROM embedding_cache`).get() as { cnt: number }
       ).cnt;
 
       if (count > EMBEDDING_CACHE_MAX_ENTRIES) {
-        const toDelete = Math.ceil(count * 0.1);
+        const toDelete = Math.ceil(count * EMBEDDING_CACHE_EVICTION_RATIO);
         this.db
           .prepare(
             `DELETE FROM embedding_cache WHERE (hash, model, provider) IN (

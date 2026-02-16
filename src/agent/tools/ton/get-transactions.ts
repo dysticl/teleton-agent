@@ -4,22 +4,15 @@ import { TonClient } from "@ton/ton";
 import { Address } from "@ton/core";
 import { getCachedHttpEndpoint } from "../../../ton/endpoint.js";
 import { formatTransactions } from "../../../ton/format-transactions.js";
-
-/**
- * Parameters for ton_get_transactions tool
- */
 interface GetTransactionsParams {
   address: string;
   limit?: number;
 }
-
-/**
- * Tool definition for ton_get_transactions
- */
 export const tonGetTransactionsTool: Tool = {
   name: "ton_get_transactions",
   description:
     "Get transaction history for any TON address. Returns transactions with type (ton_received, ton_sent, jetton_received, jetton_sent, nft_received, nft_sent, gas_refund), amount, counterparty, and explorer link.",
+  category: "data-bearing",
   parameters: Type.Object({
     address: Type.String({
       description: "TON address to get transactions for (EQ... or UQ... format)",
@@ -33,10 +26,6 @@ export const tonGetTransactionsTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for ton_get_transactions tool
- */
 export const tonGetTransactionsExecutor: ToolExecutor<GetTransactionsParams> = async (
   params,
   context
@@ -44,7 +33,6 @@ export const tonGetTransactionsExecutor: ToolExecutor<GetTransactionsParams> = a
   try {
     const { address, limit = 10 } = params;
 
-    // Validate address
     let addressObj: Address;
     try {
       addressObj = Address.parse(address);
@@ -55,16 +43,13 @@ export const tonGetTransactionsExecutor: ToolExecutor<GetTransactionsParams> = a
       };
     }
 
-    // Get decentralized endpoint
     const endpoint = await getCachedHttpEndpoint();
     const client = new TonClient({ endpoint });
 
-    // Get transactions
     const transactions = await client.getTransactions(addressObj, {
       limit: Math.min(limit, 50),
     });
 
-    // Format using shared utility
     const formatted = formatTransactions(transactions);
 
     return {

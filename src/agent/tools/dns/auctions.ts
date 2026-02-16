@@ -1,21 +1,14 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { tonapiFetch } from "../../../constants/api-endpoints.js";
-
-/**
- * Parameters for dns_auctions tool
- */
 interface DnsAuctionsParams {
   limit?: number;
 }
-
-/**
- * Tool definition for dns_auctions
- */
 export const dnsAuctionsTool: Tool = {
   name: "dns_auctions",
   description:
     "List all active .ton domain auctions. Returns domains currently in auction with current bid prices, number of bids, and end times.",
+  category: "data-bearing",
   parameters: Type.Object({
     limit: Type.Optional(
       Type.Number({
@@ -26,10 +19,6 @@ export const dnsAuctionsTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for dns_auctions tool
- */
 export const dnsAuctionsExecutor: ToolExecutor<DnsAuctionsParams> = async (
   params,
   context

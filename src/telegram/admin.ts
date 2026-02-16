@@ -8,6 +8,7 @@ import { loadTemplate } from "../workspace/manager.js";
 import { isVerbose, setVerbose } from "../utils/logger.js";
 import type { ModulePermissions, ModuleLevel } from "../agent/tools/module-permissions.js";
 import type { ToolRegistry } from "../agent/tools/registry.js";
+import { writePluginSecret, deletePluginSecret, listPluginSecretKeys } from "../sdk/secrets.js";
 
 export interface AdminCommand {
   command: string;
@@ -20,9 +21,6 @@ const VALID_DM_POLICIES = ["open", "allowlist", "pairing", "disabled"] as const;
 const VALID_GROUP_POLICIES = ["open", "allowlist", "disabled"] as const;
 const VALID_MODULE_LEVELS = ["open", "admin", "disabled"] as const;
 
-/**
- * Admin command handler for bot panel and DM commands
- */
 export class AdminHandler {
   private bridge: TelegramBridge;
   private config: TelegramConfig;
@@ -45,23 +43,14 @@ export class AdminHandler {
     this.registry = registry ?? null;
   }
 
-  /**
-   * Check if user is admin
-   */
   isAdmin(userId: number): boolean {
     return this.config.admin_ids.includes(userId);
   }
 
-  /**
-   * Check if agent is paused
-   */
   isPaused(): boolean {
     return this.paused;
   }
 
-  /**
-   * Parse message for admin command
-   */
   parseCommand(message: string): AdminCommand | null {
     const trimmed = message.trim();
     if (!trimmed.startsWith("/") && !trimmed.startsWith("!") && !trimmed.startsWith(".")) {
@@ -80,9 +69,6 @@ export class AdminHandler {
     };
   }
 
-  /**
-   * Handle admin command
-   */
   async handleCommand(
     command: AdminCommand,
     chatId: string,
@@ -121,6 +107,8 @@ export class AdminHandler {
         return this.handleVerboseCommand();
       case "modules":
         return this.handleModulesCommand(command, isGroup ?? false);
+      case "plugin":
+        return this.handlePluginCommand(command);
       case "help":
         return this.handleHelpCommand();
       case "ping":
@@ -130,9 +118,6 @@ export class AdminHandler {
     }
   }
 
-  /**
-   * /status - Get agent status
-   */
   private async handleStatusCommand(command: AdminCommand): Promise<string> {
     const activeChatIds = this.agent.getActiveChatIds();
     const chatCount = activeChatIds.length;
@@ -154,9 +139,6 @@ export class AdminHandler {
     return status;
   }
 
-  /**
-   * /clear [chat_id] - Clear conversation history
-   */
   private async handleClearCommand(command: AdminCommand): Promise<string> {
     const targetChatId = command.args[0] || command.chatId;
 
@@ -168,9 +150,6 @@ export class AdminHandler {
     }
   }
 
-  /**
-   * /loop <number> - Set max agentic iterations
-   */
   private handleLoopCommand(command: AdminCommand): string {
     const n = parseInt(command.args[0], 10);
     if (isNaN(n) || n < 1 || n > 50) {
@@ -181,9 +160,6 @@ export class AdminHandler {
     return `🔄 Max iterations set to **${n}**`;
   }
 
-  /**
-   * /model <name> - Switch LLM model at runtime
-   */
   private handleModelCommand(command: AdminCommand): string {
     const cfg = this.agent.getConfig();
     if (command.args.length === 0) {
@@ -195,9 +171,6 @@ export class AdminHandler {
     return `🧠 Model: **${oldModel}** → **${newModel}**`;
   }
 
-  /**
-   * /policy <dm|group> <value> - Change access policies
-   */
   private handlePolicyCommand(command: AdminCommand): string {
     if (command.args.length < 2) {
       return (
@@ -230,27 +203,18 @@ export class AdminHandler {
     return `❌ Unknown target: ${target}. Use "dm" or "group".`;
   }
 
-  /**
-   * /pause - Pause agent responses
-   */
   private handlePauseCommand(): string {
     if (this.paused) return "⏸️ Already paused.";
     this.paused = true;
     return "⏸️ Agent paused. Use /resume to restart.";
   }
 
-  /**
-   * /resume - Resume agent responses
-   */
   private handleResumeCommand(): string {
     if (!this.paused) return "▶️ Already running.";
     this.paused = false;
     return "▶️ Agent resumed.";
   }
 
-  /**
-   * /strategy [buy|sell <percent>] - View or change trading thresholds at runtime
-   */
   private handleStrategyCommand(command: AdminCommand): string {
     if (command.args.length === 0) {
       const buy = Math.round(DEALS_CONFIG.strategy.buyMaxMultiplier * 100);
@@ -287,19 +251,12 @@ export class AdminHandler {
     return `❌ Unknown target: ${target}. Use "buy" or "sell".`;
   }
 
-  /**
-   * /stop - Emergency shutdown
-   */
   private async handleStopCommand(): Promise<string> {
     console.log("🛑 [Admin] /stop command received - shutting down");
-    // Give time for the reply to be sent, then kill
     setTimeout(() => process.exit(0), 1000);
     return "🛑 Shutting down...";
   }
 
-  /**
-   * /wallet - Check TON wallet balance
-   */
   private async handleWalletCommand(): Promise<string> {
     const address = getWalletAddress();
     if (!address) return "❌ No wallet configured.";
@@ -310,9 +267,6 @@ export class AdminHandler {
     return `💎 **${result.balance} TON**\n📍 \`${address}\``;
   }
 
-  /**
-   * Get bootstrap template content for /boot passthrough
-   */
   getBootstrapContent(): string | null {
     try {
       return loadTemplate("BOOTSTRAP.md");
@@ -321,18 +275,12 @@ export class AdminHandler {
     }
   }
 
-  /**
-   * /verbose - Toggle verbose logging at runtime
-   */
   private handleVerboseCommand(): string {
     const next = !isVerbose();
     setVerbose(next);
     return next ? "🔊 Verbose logging **ON**" : "🔇 Verbose logging **OFF**";
   }
 
-  /**
-   * /modules - Manage per-group module permissions
-   */
   private handleModulesCommand(command: AdminCommand, isGroup: boolean): string {
     if (!this.permissions || !this.registry) {
       return "❌ Module permissions not available";
@@ -410,18 +358,15 @@ export class AdminHandler {
     module = module.toLowerCase();
     level = level.toLowerCase();
 
-    // Validate module exists
     const available = this.registry!.getAvailableModules();
     if (!available.includes(module)) {
       return `❌ Unknown module: "${module}"`;
     }
 
-    // Check protected
     if (this.permissions!.isProtected(module)) {
       return `⛔ Module "${module}" is protected`;
     }
 
-    // Validate level
     if (!VALID_MODULE_LEVELS.includes(level as any)) {
       return `❌ Invalid level: "${level}". Valid: ${VALID_MODULE_LEVELS.join(", ")}`;
     }
@@ -481,9 +426,60 @@ export class AdminHandler {
     return "✅ All modules reset to **open**";
   }
 
-  /**
-   * /help - Show available commands
-   */
+  private handlePluginCommand(command: AdminCommand): string {
+    const sub = command.args[0]?.toLowerCase();
+
+    if (!sub) {
+      return (
+        "🔌 **Plugin Secrets**\n\n" +
+        "**/plugin set** <name> <key> <value>\n" +
+        "Set a secret for a plugin\n\n" +
+        "**/plugin unset** <name> <key>\n" +
+        "Remove a secret\n\n" +
+        "**/plugin keys** <name>\n" +
+        "List configured secret keys"
+      );
+    }
+
+    switch (sub) {
+      case "set": {
+        const [, pluginName, key, ...valueParts] = command.args;
+        if (!pluginName || !key || valueParts.length === 0) {
+          return "❌ Usage: /plugin set <name> <key> <value>";
+        }
+        const value = valueParts.join(" ");
+        writePluginSecret(pluginName, key, value);
+        return `✅ Secret **${key}** saved for **${pluginName}**\n\n⚠️ Restart agent or reload plugin for changes to take effect.`;
+      }
+
+      case "unset": {
+        const [, pluginName, key] = command.args;
+        if (!pluginName || !key) {
+          return "❌ Usage: /plugin unset <name> <key>";
+        }
+        const deleted = deletePluginSecret(pluginName, key);
+        return deleted
+          ? `✅ Secret **${key}** removed from **${pluginName}**`
+          : `⚠️ Secret **${key}** not found for **${pluginName}**`;
+      }
+
+      case "keys": {
+        const [, pluginName] = command.args;
+        if (!pluginName) {
+          return "❌ Usage: /plugin keys <name>";
+        }
+        const keys = listPluginSecretKeys(pluginName);
+        if (keys.length === 0) {
+          return `🔌 **${pluginName}** — no secrets configured`;
+        }
+        return `🔌 **${pluginName}** secrets:\n${keys.map((k) => `  • ${k}`).join("\n")}`;
+      }
+
+      default:
+        return `❌ Unknown subcommand: "${sub}"\n\nUsage: /plugin set|unset|keys <name> ...`;
+    }
+  }
+
   private handleHelpCommand(): string {
     return `🤖 **Teleton Admin Commands**
 
@@ -504,6 +500,9 @@ View or change trading thresholds
 
 **/modules** [set|info|reset]
 Manage per-group module permissions
+
+**/plugin** set|unset|keys <name> ...
+Manage plugin secrets (API keys, tokens)
 
 **/wallet**
 Check TON wallet balance

@@ -1,8 +1,8 @@
 /**
- * Central tool registration for the Tonnet agent.
+ * Central tool registration for the Teleton agent.
  *
  * Each category exports a `tools: ToolEntry[]` array with scope info co-located.
- * Market and deals tools are loaded separately via module-loader.ts.
+ * Deals tools are loaded separately via module-loader.ts.
  */
 
 import type { ToolRegistry } from "./registry.js";
@@ -26,9 +26,6 @@ const ALL_CATEGORIES: ToolEntry[][] = [
   workspaceTools,
 ];
 
-/**
- * Register all core tools with the given registry.
- */
 export function registerAllTools(registry: ToolRegistry): void {
   for (const category of ALL_CATEGORIES) {
     for (const { tool, executor, scope } of category) {

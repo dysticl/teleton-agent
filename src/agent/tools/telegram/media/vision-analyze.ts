@@ -30,6 +30,7 @@ export const visionAnalyzeTool: Tool = {
   name: "vision_analyze",
   description:
     "Analyze an image using Claude's vision capabilities. Can analyze images from Telegram messages OR from local workspace files. Use this when a user sends an image and asks you to describe, analyze, or understand its content. Returns Claude's analysis of the image.",
+  category: "data-bearing",
   parameters: Type.Object({
     chatId: Type.Optional(
       Type.String({
@@ -108,7 +109,6 @@ export const visionAnalyzeExecutor: ToolExecutor<VisionAnalyzeParams> = async (
     let source: string;
 
     if (hasFilePath) {
-      // === LOCAL FILE MODE ===
       console.log(`📷 Reading local image: ${filePath}`);
 
       // Validate workspace path
@@ -148,7 +148,6 @@ export const visionAnalyzeExecutor: ToolExecutor<VisionAnalyzeParams> = async (
       data = readFileSync(validatedPath.absolutePath);
       source = `file:${filePath}`;
     } else {
-      // === TELEGRAM MESSAGE MODE ===
       console.log(`📷 Downloading image from message ${messageId}...`);
 
       // Get underlying GramJS client

@@ -3,21 +3,14 @@ import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { DEDUST_API_URL } from "./constants.js";
 import { fetchWithTimeout } from "../../../utils/fetch.js";
 import { findAsset, findAssetBySymbol, fromUnits } from "./asset-cache.js";
-
-/**
- * Parameters for dedust_token_info tool
- */
 interface DedustTokenInfoParams {
   token: string;
 }
-
-/**
- * Tool definition for dedust_token_info
- */
 export const dedustTokenInfoTool: Tool = {
   name: "dedust_token_info",
   description:
     "Get detailed information about a jetton on DeDust: on-chain metadata (name, symbol, decimals, image), top holders, top traders by volume, and largest recent buys. Accepts a jetton master address (EQ...) or a symbol like 'USDT'.",
+  category: "data-bearing",
   parameters: Type.Object({
     token: Type.String({
       description: "Jetton master address (EQ... format) or token symbol (e.g. 'USDT', 'DUST')",
@@ -63,10 +56,6 @@ interface Holder {
   owner: string;
   balance: string;
 }
-
-/**
- * Executor for dedust_token_info tool
- */
 export const dedustTokenInfoExecutor: ToolExecutor<DedustTokenInfoParams> = async (
   params,
   _context
@@ -132,7 +121,6 @@ export const dedustTokenInfoExecutor: ToolExecutor<DedustTokenInfoParams> = asyn
       time: b.ts,
     }));
 
-    // Build message
     let message = `${name} (${symbol})\n`;
     message += `Address: ${address}\n`;
     message += `Decimals: ${decimals}\n`;

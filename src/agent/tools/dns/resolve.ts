@@ -1,31 +1,20 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { tonapiFetch } from "../../../constants/api-endpoints.js";
-
-/**
- * Parameters for dns_resolve tool
- */
 interface DnsResolveParams {
   domain: string;
 }
-
-/**
- * Tool definition for dns_resolve
- */
 export const dnsResolveTool: Tool = {
   name: "dns_resolve",
   description:
     "Resolve a .ton domain to its associated wallet address. Only works for domains that are already owned (not available or in auction).",
+  category: "data-bearing",
   parameters: Type.Object({
     domain: Type.String({
       description: "Domain name to resolve (with or without .ton extension)",
     }),
   }),
 };
-
-/**
- * Executor for dns_resolve tool
- */
 export const dnsResolveExecutor: ToolExecutor<DnsResolveParams> = async (
   params,
   context

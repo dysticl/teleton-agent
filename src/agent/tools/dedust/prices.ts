@@ -2,10 +2,6 @@ import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { DEDUST_API_URL } from "./constants.js";
 import { fetchWithTimeout } from "../../../utils/fetch.js";
-
-/**
- * Parameters for dedust_prices tool
- */
 interface DedustPricesParams {
   symbols?: string[];
 }
@@ -18,14 +14,11 @@ interface PriceEntry {
   price: number;
   updatedAt: string;
 }
-
-/**
- * Tool definition for dedust_prices
- */
 export const dedustPricesTool: Tool = {
   name: "dedust_prices",
   description:
     "Get real-time token prices from DeDust DEX. Returns USD prices for TON, BTC, ETH, USDT, and other listed tokens. Optionally filter by symbol(s).",
+  category: "data-bearing",
   parameters: Type.Object({
     symbols: Type.Optional(
       Type.Array(
@@ -39,10 +32,6 @@ export const dedustPricesTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for dedust_prices tool
- */
 export const dedustPricesExecutor: ToolExecutor<DedustPricesParams> = async (
   params,
   _context
@@ -66,7 +55,6 @@ export const dedustPricesExecutor: ToolExecutor<DedustPricesParams> = async (
     // Sort by symbol
     prices.sort((a, b) => a.symbol.localeCompare(b.symbol));
 
-    // Build message
     let message = `DeDust Prices (${prices.length} tokens):\n\n`;
     for (const p of prices) {
       const priceStr =

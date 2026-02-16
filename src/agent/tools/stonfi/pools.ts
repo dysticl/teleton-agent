@@ -2,22 +2,15 @@ import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { fetchWithTimeout } from "../../../utils/fetch.js";
 import { STONFI_API_BASE_URL } from "../../../constants/api-endpoints.js";
-
-/**
- * Parameters for jetton_pools tool
- */
 interface JettonPoolsParams {
   jetton_address?: string;
   limit?: number;
 }
-
-/**
- * Tool definition for jetton_pools
- */
 export const stonfiPoolsTool: Tool = {
   name: "stonfi_pools",
   description:
     "Get liquidity pools for a Jetton or list top pools by volume. Shows pool addresses, liquidity, volume, APY, and trading pairs. Useful for finding where to trade a token or analyzing DeFi opportunities.",
+  category: "data-bearing",
   parameters: Type.Object({
     jetton_address: Type.Optional(
       Type.String({
@@ -34,10 +27,6 @@ export const stonfiPoolsTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for jetton_pools tool
- */
 export const stonfiPoolsExecutor: ToolExecutor<JettonPoolsParams> = async (
   params,
   context
@@ -120,7 +109,6 @@ export const stonfiPoolsExecutor: ToolExecutor<JettonPoolsParams> = async (
       };
     });
 
-    // Build message
     let message = jetton_address
       ? `Pools for ${jetton_address}:\n\n`
       : `🏊 Top ${formattedPools.length} Pools by Volume:\n\n`;

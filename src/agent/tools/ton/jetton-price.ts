@@ -2,20 +2,15 @@ import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { tonapiFetch } from "../../../constants/api-endpoints.js";
 
-/**
- * Parameters for jetton_price tool
- */
 interface JettonPriceParams {
   jetton_address: string;
 }
 
-/**
- * Tool definition for jetton_price
- */
 export const jettonPriceTool: Tool = {
   name: "jetton_price",
   description:
     "Get the current price of a Jetton (token) in USD and TON, along with 24h, 7d, and 30d price changes. Useful to check token value before swapping or to monitor investments.",
+  category: "data-bearing",
   parameters: Type.Object({
     jetton_address: Type.String({
       description: "Jetton master contract address (EQ... or 0:... format)",
@@ -23,9 +18,6 @@ export const jettonPriceTool: Tool = {
   }),
 };
 
-/**
- * Executor for jetton_price tool
- */
 export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
   params,
   context
@@ -33,7 +25,6 @@ export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
   try {
     const { jetton_address } = params;
 
-    // Fetch price from TonAPI rates endpoint
     const response = await tonapiFetch(
       `/rates?tokens=${encodeURIComponent(jetton_address)}&currencies=usd,ton`
     );
@@ -49,7 +40,6 @@ export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
     const rateData = data.rates?.[jetton_address];
 
     if (!rateData) {
-      // Try to get jetton info for better error message
       const infoResponse = await tonapiFetch(`/jettons/${jetton_address}`);
 
       if (infoResponse.status === 404) {
@@ -70,7 +60,6 @@ export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
     const diff7d = rateData.diff_7d || {};
     const diff30d = rateData.diff_30d || {};
 
-    // Also fetch jetton metadata for symbol
     let symbol = "TOKEN";
     let name = "Unknown Token";
     try {
@@ -80,9 +69,7 @@ export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
         symbol = infoData.metadata?.symbol || symbol;
         name = infoData.metadata?.name || name;
       }
-    } catch {
-      // Ignore errors fetching metadata
-    }
+    } catch {}
 
     const priceInfo = {
       symbol,
@@ -98,7 +85,6 @@ export const jettonPriceExecutor: ToolExecutor<JettonPriceParams> = async (
       change30dTON: diff30d.TON || null,
     };
 
-    // Build human-readable message
     let message = `${name} (${symbol})\n\n`;
 
     if (priceInfo.priceUSD !== null) {

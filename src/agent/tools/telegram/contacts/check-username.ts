@@ -28,6 +28,7 @@ Use this to:
 - Check if a trader's username is valid
 - Verify channel/group names
 - See if a username is available`,
+  category: "data-bearing",
   parameters: Type.Object({
     username: Type.String({
       description: "Username to check (with or without @)",
@@ -46,10 +47,10 @@ export const telegramCheckUsernameExecutor: ToolExecutor<CheckUsernameParams> = 
     const { username } = params;
     const cleanUsername = username.replace("@", "").toLowerCase();
 
-    if (!cleanUsername || cleanUsername.length < 5) {
+    if (!cleanUsername) {
       return {
         success: false,
-        error: "Username must be at least 5 characters",
+        error: "Username cannot be empty",
       };
     }
 

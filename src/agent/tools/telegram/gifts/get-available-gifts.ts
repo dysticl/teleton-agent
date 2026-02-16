@@ -17,6 +17,7 @@ export const telegramGetAvailableGiftsTool: Tool = {
   name: "telegram_get_available_gifts",
   description:
     "Get all Star Gifts available for purchase. There are two types: LIMITED gifts (rare, can become collectibles, may sell out) and UNLIMITED gifts (always available). Use filter to see specific types. Returns gift ID, name, stars cost, and availability. Use the gift ID with telegram_send_gift to send one.",
+  category: "data-bearing",
   parameters: Type.Object({
     filter: Type.Optional(
       Type.Union([Type.Literal("all"), Type.Literal("limited"), Type.Literal("unlimited")], {
@@ -59,7 +60,6 @@ export const telegramGetAvailableGiftsExecutor: ToolExecutor<GetAvailableGiftsPa
       };
     }
 
-    // Process and categorize gifts
     let gifts = (result.gifts || []).map((gift: any) => {
       const isLimited = gift.limited || false;
       const soldOut = gift.soldOut || false;
@@ -80,19 +80,16 @@ export const telegramGetAvailableGiftsExecutor: ToolExecutor<GetAvailableGiftsPa
       };
     });
 
-    // Apply filters
     if (filter === "limited") {
       gifts = gifts.filter((g: any) => g.isLimited);
     } else if (filter === "unlimited") {
       gifts = gifts.filter((g: any) => !g.isLimited);
     }
 
-    // Filter out sold out unless requested
     if (!includesSoldOut) {
       gifts = gifts.filter((g: any) => !g.soldOut);
     }
 
-    // Separate and count
     const limited = gifts.filter((g: any) => g.isLimited);
     const unlimited = gifts.filter((g: any) => !g.isLimited);
 

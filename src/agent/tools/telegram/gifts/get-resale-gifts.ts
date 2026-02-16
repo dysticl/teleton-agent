@@ -18,6 +18,7 @@ export const telegramGetResaleGiftsTool: Tool = {
   name: "telegram_get_resale_gifts",
   description:
     "Browse the collectible gifts marketplace. Shows all collectibles currently listed for sale by other users. Can filter by specific gift type or browse all. Returns prices in Stars and seller info. Use telegram_buy_resale_gift to purchase.",
+  category: "data-bearing",
   parameters: Type.Object({
     giftId: Type.Optional(
       Type.String({
@@ -49,6 +50,14 @@ export const telegramGetResaleGiftsExecutor: ToolExecutor<GetResaleGiftsParams> 
   try {
     const { giftId, limit = 30, sortByPrice = false } = params;
     const gramJsClient = context.bridge.getClient().getClient();
+
+    if (!(Api.payments as any).GetResaleStarGifts) {
+      return {
+        success: false,
+        error:
+          "Resale gift marketplace is not supported in the current Telegram API layer. A GramJS update is required.",
+      };
+    }
 
     const result: any = await gramJsClient.invoke(
       new (Api.payments as any).GetResaleStarGifts({

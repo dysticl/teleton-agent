@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "crypto";
+import type { TaskRow } from "../types/db-rows.js";
 
 export type TaskStatus = "pending" | "in_progress" | "done" | "failed" | "cancelled";
 
@@ -20,15 +21,9 @@ export interface Task {
   scheduledMessageId?: number;
 }
 
-/**
- * Manage agent tasks
- */
 export class TaskStore {
   constructor(private db: Database.Database) {}
 
-  /**
-   * Create a new task
-   */
   createTask(task: {
     description: string;
     priority?: number;
@@ -61,10 +56,8 @@ export class TaskStore {
         task.scheduledMessageId ?? null
       );
 
-    // Add dependencies if provided (with cycle detection)
     if (task.dependsOn && task.dependsOn.length > 0) {
       for (const parentId of task.dependsOn) {
-        // This will throw if cycle detected
         this.addDependency(id, parentId);
       }
     }
@@ -83,9 +76,6 @@ export class TaskStore {
     };
   }
 
-  /**
-   * Update a task
-   */
   updateTask(
     taskId: string,
     updates: {
@@ -101,7 +91,6 @@ export class TaskStore {
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Build dynamic update query
     const updateFields: string[] = [];
     const updateValues: any[] = [];
 
@@ -113,13 +102,11 @@ export class TaskStore {
       updateFields.push("status = ?");
       updateValues.push(updates.status);
 
-      // Auto-set started_at when status changes to in_progress
       if (updates.status === "in_progress" && !task.startedAt) {
         updateFields.push("started_at = ?");
         updateValues.push(now);
       }
 
-      // Auto-set completed_at when status changes to done/failed/cancelled
       if (
         (updates.status === "done" ||
           updates.status === "failed" ||
@@ -160,11 +147,8 @@ export class TaskStore {
     return this.getTask(taskId);
   }
 
-  /**
-   * Get a task by ID
-   */
   getTask(id: string): Task | undefined {
-    const row = this.db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id) as any;
+    const row = this.db.prepare(`SELECT * FROM tasks WHERE id = ?`).get(id) as TaskRow | undefined;
 
     if (!row) return undefined;
 
@@ -173,22 +157,19 @@ export class TaskStore {
       description: row.description,
       status: row.status as TaskStatus,
       priority: row.priority,
-      createdBy: row.created_by,
+      createdBy: row.created_by ?? undefined,
       createdAt: new Date(row.created_at * 1000),
       startedAt: row.started_at ? new Date(row.started_at * 1000) : undefined,
       completedAt: row.completed_at ? new Date(row.completed_at * 1000) : undefined,
-      result: row.result,
-      error: row.error,
+      result: row.result ?? undefined,
+      error: row.error ?? undefined,
       scheduledFor: row.scheduled_for ? new Date(row.scheduled_for * 1000) : undefined,
-      payload: row.payload,
-      reason: row.reason,
-      scheduledMessageId: row.scheduled_message_id,
+      payload: row.payload ?? undefined,
+      reason: row.reason ?? undefined,
+      scheduledMessageId: row.scheduled_message_id ?? undefined,
     };
   }
 
-  /**
-   * List tasks with optional filters
-   */
   listTasks(filter?: { status?: TaskStatus; createdBy?: string }): Task[] {
     let sql = `SELECT * FROM tasks WHERE 1=1`;
     const params: any[] = [];
@@ -205,29 +186,26 @@ export class TaskStore {
 
     sql += ` ORDER BY priority DESC, created_at ASC`;
 
-    const rows = this.db.prepare(sql).all(...params) as any[];
+    const rows = this.db.prepare(sql).all(...params) as TaskRow[];
 
     return rows.map((row) => ({
       id: row.id,
       description: row.description,
       status: row.status as TaskStatus,
       priority: row.priority,
-      createdBy: row.created_by,
+      createdBy: row.created_by ?? undefined,
       createdAt: new Date(row.created_at * 1000),
       startedAt: row.started_at ? new Date(row.started_at * 1000) : undefined,
       completedAt: row.completed_at ? new Date(row.completed_at * 1000) : undefined,
-      result: row.result,
-      error: row.error,
+      result: row.result ?? undefined,
+      error: row.error ?? undefined,
       scheduledFor: row.scheduled_for ? new Date(row.scheduled_for * 1000) : undefined,
-      payload: row.payload,
-      reason: row.reason,
-      scheduledMessageId: row.scheduled_message_id,
+      payload: row.payload ?? undefined,
+      reason: row.reason ?? undefined,
+      scheduledMessageId: row.scheduled_message_id ?? undefined,
     }));
   }
 
-  /**
-   * Get active (pending or in_progress) tasks
-   */
   getActiveTasks(): Task[] {
     const rows = this.db
       .prepare(
@@ -237,91 +215,71 @@ export class TaskStore {
       ORDER BY priority DESC, created_at ASC
     `
       )
-      .all() as any[];
+      .all() as TaskRow[];
 
     return rows.map((row) => ({
       id: row.id,
       description: row.description,
       status: row.status as TaskStatus,
       priority: row.priority,
-      createdBy: row.created_by,
+      createdBy: row.created_by ?? undefined,
       createdAt: new Date(row.created_at * 1000),
       startedAt: row.started_at ? new Date(row.started_at * 1000) : undefined,
       completedAt: row.completed_at ? new Date(row.completed_at * 1000) : undefined,
-      result: row.result,
-      error: row.error,
+      result: row.result ?? undefined,
+      error: row.error ?? undefined,
       scheduledFor: row.scheduled_for ? new Date(row.scheduled_for * 1000) : undefined,
-      payload: row.payload,
-      reason: row.reason,
-      scheduledMessageId: row.scheduled_message_id,
+      payload: row.payload ?? undefined,
+      reason: row.reason ?? undefined,
+      scheduledMessageId: row.scheduled_message_id ?? undefined,
     }));
   }
 
-  /**
-   * Delete a task
-   */
   deleteTask(taskId: string): boolean {
     const result = this.db.prepare(`DELETE FROM tasks WHERE id = ?`).run(taskId);
     return result.changes > 0;
   }
 
-  /**
-   * Mark task as done
-   */
   completeTask(taskId: string, result?: string): Task | undefined {
     return this.updateTask(taskId, { status: "done", result });
   }
 
-  /**
-   * Mark task as failed
-   */
   failTask(taskId: string, error: string): Task | undefined {
     return this.updateTask(taskId, { status: "failed", error });
   }
 
-  /**
-   * Start a task
-   */
   startTask(taskId: string): Task | undefined {
     return this.updateTask(taskId, { status: "in_progress" });
   }
 
-  /**
-   * Cancel a task
-   */
   cancelTask(taskId: string): Task | undefined {
     return this.updateTask(taskId, { status: "cancelled" });
   }
 
   /**
-   * Check if adding a dependency would create a cycle
-   * Uses BFS to traverse dependency graph
+   * Check if adding a dependency would create a cycle.
+   * Uses BFS to traverse the dependency graph.
    */
   private wouldCreateCycle(taskId: string, newParentId: string): boolean {
-    // Direct self-dependency
     if (taskId === newParentId) {
       return true;
     }
 
-    // BFS to detect indirect cycles
     const visited = new Set<string>();
     const queue = [newParentId];
 
     while (queue.length > 0) {
       const current = queue.shift()!;
 
-      // If we reach back to taskId, we have a cycle
       if (current === taskId) {
         return true;
       }
 
-      // Skip if already visited (avoid infinite loop on existing cycles)
       if (visited.has(current)) {
         continue;
       }
       visited.add(current);
 
-      // Add all dependencies of current to queue
       const deps = this.getDependencies(current);
       queue.push(...deps);
     }
@@ -329,12 +287,7 @@ export class TaskStore {
     return false;
   }
 
-  /**
-   * Add a dependency (taskId depends on parentTaskId)
-   * Throws error if would create circular dependency
-   */
   addDependency(taskId: string, parentTaskId: string): void {
-    // Check for cycles before adding
     if (this.wouldCreateCycle(taskId, parentTaskId)) {
       throw new Error(
         `Cannot add dependency: would create circular dependency (${taskId} → ${parentTaskId})`
@@ -348,9 +301,6 @@ export class TaskStore {
       .run(taskId, parentTaskId);
   }
 
-  /**
-   * Get all tasks that this task depends on
-   */
   getDependencies(taskId: string): string[] {
     const rows = this.db
       .prepare(`SELECT depends_on_task_id FROM task_dependencies WHERE task_id = ?`)
@@ -359,9 +309,6 @@ export class TaskStore {
     return rows.map((r) => r.depends_on_task_id);
   }
 
-  /**
-   * Get all tasks that depend on this task
-   */
   getDependents(taskId: string): string[] {
     const rows = this.db
       .prepare(`SELECT task_id FROM task_dependencies WHERE depends_on_task_id = ?`)
@@ -371,12 +318,10 @@ export class TaskStore {
   }
 
   /**
-   * Check if a task can execute (all dependencies are done)
-   * Optimized: Single query with JOIN instead of N+1 queries
+   * Check if a task can execute (all dependencies are done).
+   * Uses a single JOIN query instead of N+1 queries.
    */
   canExecute(taskId: string): boolean {
-    // Single query: count dependencies that are NOT done
-    // If count > 0, task cannot execute
     const result = this.db
       .prepare(
         `
@@ -393,11 +338,10 @@ export class TaskStore {
   }
 
   /**
-   * Get all parent task results for a dependent task
-   * Optimized: Single query with JOIN instead of N+1 queries
+   * Get all parent task results for a dependent task.
+   * Uses a single JOIN query instead of N+1 queries.
    */
   getParentResults(taskId: string): Array<{ taskId: string; description: string; result: any }> {
-    // Single query with JOIN to get all parent results
     const rows = this.db
       .prepare(
         `
@@ -416,7 +360,6 @@ export class TaskStore {
       try {
         parsedResult = JSON.parse(row.result);
       } catch (e) {
-        // If result is not JSON, use as string
         parsedResult = row.result;
       }
       return {
@@ -428,13 +371,8 @@ export class TaskStore {
   }
 }
 
-// Singleton instance cache (keyed by db path to support multiple databases in testing)
 const instances = new WeakMap<Database.Database, TaskStore>();
 
-/**
- * Get or create a TaskStore instance for the given database.
- * Uses singleton pattern to avoid creating multiple instances per database.
- */
 export function getTaskStore(db: Database.Database): TaskStore {
   let store = instances.get(db);
   if (!store) {

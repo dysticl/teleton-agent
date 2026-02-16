@@ -1,19 +1,12 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { getTonPrice } from "../../../ton/wallet-service.js";
-
-/**
- * Tool definition for ton_price
- */
 export const tonPriceTool: Tool = {
   name: "ton_price",
   description: "Get current TON cryptocurrency price in USD. Returns real-time market price.",
+  category: "data-bearing",
   parameters: Type.Object({}),
 };
-
-/**
- * Executor for ton_price tool
- */
 export const tonPriceExecutor: ToolExecutor<{}> = async (params, context): Promise<ToolResult> => {
   try {
     const priceData = await getTonPrice();

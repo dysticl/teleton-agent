@@ -19,7 +19,7 @@
 - **Multi-Provider LLM**: Anthropic, OpenAI, Google Gemini, xAI Grok, Groq, OpenRouter
 - **TON Blockchain**: Built-in wallet, send/receive TON & jettons, swap on STON.fi and DeDust, NFTs
 - **Persistent memory**: Remembers context across restarts with automatic context management
-- **116 built-in tools**: Messaging, media, blockchain, DEX trading, deals, market, DNS, journaling, and more
+- **112 built-in tools**: Messaging, media, blockchain, DEX trading, deals, DNS, journaling, and more
 - **Plugin SDK**: Extend the agent with custom tools — full access to TON and Telegram APIs via namespaced SDK
 - **Secure by design**: Sandboxed workspace, immutable config, prompt injection defense
 
@@ -37,7 +37,6 @@
 | DeDust DEX | 5 | Swap, quote, pools, prices, token info |
 | TON DNS | 7 | Domain auctions, bidding, linking, resolution, availability checks |
 | Deals | 5 | Secure gift/TON trading with strategy enforcement and inline bot confirmations |
-| Market | 4 | Gift floor prices, search, cheapest listings, price history |
 | Journal | 3 | Trade/operation logging with natural language queries |
 | Workspace | 6 | Sandboxed file operations with path traversal protection |
 
@@ -49,7 +48,7 @@
 | **RAG + Hybrid Search** | Local embeddings with FTS5 keyword + sqlite-vec semantic search |
 | **Auto-Compaction** | AI-summarized context management prevents overflow, preserves key information |
 | **Observation Masking** | Compresses old tool results to save ~90% context window |
-| **Plugin SDK** | Namespaced SDK (`sdk.ton`, `sdk.telegram`) with isolated databases and lifecycle hooks |
+| **Plugin SDK** | Namespaced SDK (`sdk.ton`, `sdk.telegram`, `sdk.secrets`, `sdk.storage`) with 53 methods, isolated databases and lifecycle hooks |
 | **Vision Analysis** | Image understanding via multimodal LLM |
 | **Voice Synthesis** | Text-to-speech for voice messages |
 | **Scheduled Tasks** | Time-based task execution with dependency resolution |
@@ -170,6 +169,12 @@ telegram:
   session_reset_policy:
     daily_reset_enabled: true
     daily_reset_hour: 4
+
+webui:                       # Optional: Web dashboard
+  enabled: false             # Enable WebUI server
+  port: 7777                 # HTTP server port
+  host: "127.0.0.1"          # Localhost only (security)
+  # auth_token: "..."        # Auto-generated if omitted
 ```
 
 ### Environment Variables
@@ -181,6 +186,69 @@ telegram:
 | `TELETON_TG_API_ID` | Telegram API ID (overrides config) | - |
 | `TELETON_TG_API_HASH` | Telegram API Hash (overrides config) | - |
 | `TELETON_TG_PHONE` | Phone number (overrides config) | - |
+| `TELETON_WEBUI_ENABLED` | Enable WebUI (overrides config) | `false` |
+| `TELETON_WEBUI_PORT` | WebUI port (overrides config) | `7777` |
+
+---
+
+## WebUI Dashboard
+
+Teleton includes an **optional web dashboard** for monitoring and configuration. The WebUI is disabled by default and runs only on localhost for security.
+
+### Features
+
+- **Dashboard**: System status, uptime, model info, session count
+- **Tools Management**: View all 112+ tools grouped by module with scope badges
+- **Plugins Browser**: List loaded plugins with manifests
+- **Soul Editor**: Edit SOUL.md, SECURITY.md, STRATEGY.md, MEMORY.md files
+- **Memory Search**: Search knowledge base with hybrid vector+keyword search
+- **Live Logs**: Real-time log streaming via Server-Sent Events
+
+### Usage
+
+**Enable via config.yaml:**
+```yaml
+webui:
+  enabled: true
+  port: 7777
+```
+
+**Enable via CLI flag:**
+```bash
+teleton start --webui
+# or specify custom port
+teleton start --webui --webui-port 8080
+```
+
+**Enable via environment variable:**
+```bash
+TELETON_WEBUI_ENABLED=true teleton start
+```
+
+### Access
+
+When WebUI is enabled, the agent will display:
+```
+🌐 WebUI: http://localhost:7777?token=your-token-here
+🔑 Token: your-token-here
+```
+
+1. Click the URL (token is auto-filled) or visit `http://localhost:7777`
+2. Paste the token from the console (displayed once at startup)
+3. Token is stored in browser localStorage for subsequent visits
+
+### Security
+
+- **Localhost only**: Server binds to `127.0.0.1` by default (not accessible from network)
+- **Bearer token auth**: All API routes require authentication
+- **No persistence**: Runtime changes (like model switches via WebUI) are not saved to config.yaml
+- **For remote access**: Use SSH tunneling or reverse proxy (nginx/caddy) with HTTPS
+
+**SSH tunnel example:**
+```bash
+ssh -L 7777:localhost:7777 user@remote-server
+# Then access http://localhost:7777 on your local machine
+```
 
 ### Workspace Files
 
@@ -234,10 +302,10 @@ src/
 ├── agent/                  # Core agent runtime
 │   ├── runtime.ts          # Agentic loop orchestration
 │   ├── client.ts           # Multi-provider LLM client
-│   └── tools/              # 116 built-in tools
+│   └── tools/              # 112 built-in tools
 │       ├── register-all.ts # Central tool registration
 │       ├── registry.ts     # Tool registry + scope filtering
-│       ├── module-loader.ts    # Built-in module loading (deals, market)
+│       ├── module-loader.ts    # Built-in module loading (deals)
 │       ├── plugin-loader.ts    # External plugin discovery
 │       ├── telegram/       # Telegram operations (66 tools)
 │       ├── ton/            # TON blockchain + jettons + DEX quote (15 tools)
@@ -250,10 +318,6 @@ src/
 │   ├── module.ts           # Module definition + lifecycle
 │   ├── executor.ts         # Deal execution logic
 │   └── strategy-checker.ts # Trading strategy enforcement
-├── market/                 # Market module (4 tools, loaded via module-loader)
-│   ├── module.ts           # Module definition + lifecycle
-│   ├── price-service.ts    # Gift floor-price tracking
-│   └── scraper.ts          # Market data scraping (Playwright)
 ├── bot/                    # Deals inline bot (Grammy + GramJS)
 │   ├── index.ts            # DealBot (Grammy Bot API)
 │   ├── gramjs-bot.ts       # GramJS MTProto for styled buttons
@@ -409,12 +473,23 @@ When `tools` is a function, the SDK provides namespaced access to core services:
 
 | Namespace | Methods |
 |-----------|---------|
-| `sdk.ton` | `getAddress()`, `getBalance()`, `getPrice()`, `sendTON(to, amount, comment?)`, `getTransactions()` |
-| `sdk.telegram` | `sendMessage()`, `editMessage()`, `sendDice()`, `sendReaction()`, `getMessages()`, `getMe()` |
-| `sdk.db` | SQLite database (available if `migrate()` is exported) |
+| `sdk.ton` | **Wallet**: `getAddress()`, `getBalance()`, `getPrice()`, `sendTON()`, `getTransactions()`, `verifyPayment()` |
+| | **Jettons**: `getJettonBalances()`, `getJettonInfo()`, `sendJetton()`, `getJettonWalletAddress()` |
+| | **NFT**: `getNftItems()`, `getNftInfo()` |
+| | **Utils**: `toNano()`, `fromNano()`, `validateAddress()` |
+| `sdk.telegram` | **Messages**: `sendMessage()`, `editMessage()`, `deleteMessage()`, `forwardMessage()`, `pinMessage()`, `searchMessages()`, `scheduleMessage()`, `getReplies()` |
+| | **Media**: `sendPhoto()`, `sendVideo()`, `sendVoice()`, `sendFile()`, `sendGif()`, `sendSticker()`, `downloadMedia()` |
+| | **Chat & Users**: `getChatInfo()`, `getUserInfo()`, `resolveUsername()`, `getParticipants()` |
+| | **Interactive**: `sendDice()`, `sendReaction()`, `createPoll()`, `createQuiz()` |
+| | **Moderation**: `banUser()`, `unbanUser()`, `muteUser()` |
+| | **Stars & Gifts**: `getStarsBalance()`, `sendGift()`, `getAvailableGifts()`, `getMyGifts()`, `getResaleGifts()`, `buyResaleGift()` |
+| | **Advanced**: `getMe()`, `isAvailable()`, `getRawClient()`, `setTyping()`, `sendStory()` |
+| `sdk.secrets` | `get()`, `require()`, `has()` — Multi-source secret resolution (env -> store -> config) |
+| `sdk.storage` | `get()`, `set()`, `delete()`, `has()`, `clear()` — KV store with TTL support |
+| `sdk.db` | Raw `better-sqlite3` database for custom SQL |
 | `sdk.config` | Sanitized app config (no API keys exposed) |
 | `sdk.pluginConfig` | Plugin-specific config from `config.yaml` `plugins:` section |
-| `sdk.log` | Prefixed logger (`info`, `warn`, `error`, `debug`) |
+| `sdk.log` | `info()`, `warn()`, `error()`, `debug()` — Prefixed logger |
 
 Plugin config in `config.yaml`:
 ```yaml

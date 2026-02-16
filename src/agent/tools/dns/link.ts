@@ -1,7 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
-import { loadWallet } from "../../../ton/wallet-service.js";
-import { mnemonicToPrivateKey } from "@ton/crypto";
+import { loadWallet, getKeyPair } from "../../../ton/wallet-service.js";
 import { WalletContractV5R1, TonClient, toNano, internal, beginCell } from "@ton/ton";
 import { Address, SendMode } from "@ton/core";
 import { getCachedHttpEndpoint } from "../../../ton/endpoint.js";
@@ -17,18 +16,10 @@ const DNS_SMC_ADDRESS_PREFIX = 0x9fd3;
 const WALLET_RECORD_KEY = BigInt(
   "0xe8d44050873dba865aa7c170ab4cce64d90839a34dcfd6cf71d14e0205443b1b"
 );
-
-/**
- * Parameters for dns_link tool
- */
 interface DnsLinkParams {
   domain: string;
   wallet_address?: string;
 }
-
-/**
- * Tool definition for dns_link
- */
 export const dnsLinkTool: Tool = {
   name: "dns_link",
   description:
@@ -44,10 +35,6 @@ export const dnsLinkTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for dns_link tool
- */
 export const dnsLinkExecutor: ToolExecutor<DnsLinkParams> = async (
   params,
   context
@@ -59,7 +46,6 @@ export const dnsLinkExecutor: ToolExecutor<DnsLinkParams> = async (
     domain = domain.toLowerCase().replace(/\.ton$/, "");
     const fullDomain = `${domain}.ton`;
 
-    // Load wallet
     const walletData = loadWallet();
     if (!walletData) {
       return {
@@ -129,21 +115,20 @@ export const dnsLinkExecutor: ToolExecutor<DnsLinkParams> = async (
       };
     }
 
-    // Convert mnemonic to private key
-    const keyPair = await mnemonicToPrivateKey(walletData.mnemonic);
+    const keyPair = await getKeyPair();
+    if (!keyPair) {
+      return { success: false, error: "Wallet key derivation failed." };
+    }
 
-    // Create wallet contract
     const wallet = WalletContractV5R1.create({
       workchain: 0,
       publicKey: keyPair.publicKey,
     });
 
-    // Get decentralized endpoint
     const endpoint = await getCachedHttpEndpoint();
     const client = new TonClient({ endpoint });
     const contract = client.open(wallet);
 
-    // Get current seqno
     const seqno = await contract.getSeqno();
 
     // Build wallet record value cell: dns_smc_address#9fd3 + address + flags

@@ -1,6 +1,9 @@
 {
   "name": "teleton",
   "version": "0.4.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "description": "Personal AI Agent for Telegram",
   "author": "ZKProof (https://t.me/zkproof)",
   "license": "MIT",
@@ -33,16 +36,24 @@
     "src/templates/"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "npm run build:sdk && npm run build:backend && npm run build:web",
+    "build:sdk": "npm run build -w @teleton-agent/sdk",
+    "build:backend": "tsup --config tsup.config.ts",
+    "build:web": "cd web && npm run build",
+    "prestart": "npm run build",
     "start": "node dist/cli/index.js start",
     "dev": "tsx watch src/index.ts",
     "dev:cli": "tsx src/cli/index.ts",
+    "dev:web": "cd web && npm run dev",
     "setup": "node dist/cli/index.js setup",
     "doctor": "node dist/cli/index.js doctor",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "prepare": "husky"
@@ -51,6 +62,7 @@
     "@clack/prompts": "^0.7.0",
     "@dedust/sdk": "^0.8.7",
     "@evaafi/sdk": "^0.9.5",
+    "@hono/node-server": "^1.19.9",
     "@huggingface/transformers": "^3.8.1",
     "@mariozechner/pi-ai": "^0.50.9",
     "@orbs-network/ton-access": "^2.3.3",
@@ -60,11 +72,12 @@
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^16.1.0",
     "better-sqlite3": "^11.7.0",
+    "chokidar": "^5.0.0",
     "commander": "^12.0.0",
     "crypto-js": "^4.2.0",
     "grammy": "^1.39.3",
+    "hono": "^4.11.9",
     "js-tiktoken": "^1.0.21",
-    "playwright": "^1.58.1",
     "sqlite-vec": "^0.1.7-alpha.2",
     "telegram": "^2.26.22",
     "yaml": "^2.7.0",
@@ -77,13 +90,15 @@
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   },
   "optionalDependencies": {
     "edge-tts": "^1.0.1"
@@ -93,6 +108,10 @@
   },
   "lint-staged": {
     "src/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/sdk/src/**/*.ts": [
       "eslint --fix",
       "prettier --write"
     ]

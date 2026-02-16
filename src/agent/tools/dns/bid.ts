@@ -1,23 +1,14 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
-import { loadWallet } from "../../../ton/wallet-service.js";
-import { mnemonicToPrivateKey } from "@ton/crypto";
+import { loadWallet, getKeyPair } from "../../../ton/wallet-service.js";
 import { WalletContractV5R1, TonClient, toNano, internal } from "@ton/ton";
 import { Address, SendMode } from "@ton/core";
 import { getCachedHttpEndpoint } from "../../../ton/endpoint.js";
 import { tonapiFetch } from "../../../constants/api-endpoints.js";
-
-/**
- * Parameters for dns_bid tool
- */
 interface DnsBidParams {
   domain: string;
   amount: number;
 }
-
-/**
- * Tool definition for dns_bid
- */
 export const dnsBidTool: Tool = {
   name: "dns_bid",
   description:
@@ -32,10 +23,6 @@ export const dnsBidTool: Tool = {
     }),
   }),
 };
-
-/**
- * Executor for dns_bid tool
- */
 export const dnsBidExecutor: ToolExecutor<DnsBidParams> = async (
   params,
   context
@@ -102,7 +89,6 @@ export const dnsBidExecutor: ToolExecutor<DnsBidParams> = async (
       }
     }
 
-    // Load wallet
     const walletData = loadWallet();
     if (!walletData) {
       return {
@@ -111,21 +97,20 @@ export const dnsBidExecutor: ToolExecutor<DnsBidParams> = async (
       };
     }
 
-    // Convert mnemonic to private key
-    const keyPair = await mnemonicToPrivateKey(walletData.mnemonic);
+    const keyPair = await getKeyPair();
+    if (!keyPair) {
+      return { success: false, error: "Wallet key derivation failed." };
+    }
 
-    // Create wallet contract
     const wallet = WalletContractV5R1.create({
       workchain: 0,
       publicKey: keyPair.publicKey,
     });
 
-    // Get decentralized endpoint
     const endpoint = await getCachedHttpEndpoint();
     const client = new TonClient({ endpoint });
     const contract = client.open(wallet);
 
-    // Get current seqno
     const seqno = await contract.getSeqno();
 
     // Send bid (just TON, no body needed for bids - op=0 is implicit)

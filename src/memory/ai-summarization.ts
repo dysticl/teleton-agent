@@ -1,10 +1,16 @@
 import { complete, type Context, type Message, type Model, type Api } from "@mariozechner/pi-ai";
 import { getUtilityModel } from "../agent/client.js";
 import type { SupportedProvider } from "../config/providers.js";
+import {
+  CHARS_PER_TOKEN_ESTIMATE,
+  TOKEN_ESTIMATE_SAFETY_MARGIN,
+  OVERSIZED_MESSAGE_RATIO,
+  ADAPTIVE_CHUNK_RATIO_BASE,
+  ADAPTIVE_CHUNK_RATIO_MIN,
+  ADAPTIVE_CHUNK_RATIO_TRIGGER,
+  DEFAULT_SUMMARY_FALLBACK_TOKENS,
+} from "../constants/limits.js";
 
-/**
- * Configuration for AI summarization
- */
 export interface SummarizationConfig {
   apiKey: string;
   contextWindow: number;
@@ -12,9 +18,6 @@ export interface SummarizationConfig {
   maxChunkTokens: number;
 }
 
-/**
- * Result from summarization operation
- */
 export interface SummarizationResult {
   summary: string;
   tokensUsed: number;
@@ -22,19 +25,14 @@ export interface SummarizationResult {
 }
 
 /**
- * Estimate token count for text content
- * Uses ~4 characters per token approximation
- * Includes 20% safety margin for accuracy
+ * Estimate token count using ~4 chars/token with 20% safety margin.
  */
 export function estimateMessageTokens(content: string): number {
-  const CHARS_PER_TOKEN = 4;
-  const SAFETY_MARGIN = 1.2;
-  return Math.ceil((content.length / CHARS_PER_TOKEN) * SAFETY_MARGIN);
+  return Math.ceil((content.length / CHARS_PER_TOKEN_ESTIMATE) * TOKEN_ESTIMATE_SAFETY_MARGIN);
 }
 
 /**
- * Split messages into chunks based on token limits
- * Uses adaptive chunking to respect context window constraints
+ * Split messages into chunks respecting token limits.
  */
 export function splitMessagesByTokens(messages: Message[], maxChunkTokens: number): Message[][] {
   if (messages.length === 0) {
@@ -46,11 +44,9 @@ export function splitMessagesByTokens(messages: Message[], maxChunkTokens: numbe
   let currentTokens = 0;
 
   for (const message of messages) {
-    // Extract text content from message
     const content = extractMessageContent(message);
     const messageTokens = estimateMessageTokens(content);
 
-    // Start new chunk if adding this message would exceed limit
     if (currentChunk.length > 0 && currentTokens + messageTokens > maxChunkTokens) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -60,7 +56,6 @@ export function splitMessagesByTokens(messages: Message[], maxChunkTokens: numbe
     currentChunk.push(message);
     currentTokens += messageTokens;
 
-    // Handle oversized single message
     if (messageTokens > maxChunkTokens && currentChunk.length === 1) {
       chunks.push(currentChunk);
       currentChunk = [];
@@ -68,7 +63,6 @@ export function splitMessagesByTokens(messages: Message[], maxChunkTokens: numbe
     }
   }
 
-  // Add remaining messages
   if (currentChunk.length > 0) {
     chunks.push(currentChunk);
   }
@@ -76,9 +70,6 @@ export function splitMessagesByTokens(messages: Message[], maxChunkTokens: numbe
   return chunks;
 }
 
-/**
- * Extract text content from a message for token estimation
- */
 function extractMessageContent(message: Message): string {
   if (message.role === "user") {
     return typeof message.content === "string" ? message.content : "[complex content]";
@@ -92,16 +83,12 @@ function extractMessageContent(message: Message): string {
   return "";
 }
 
-/**
- * Format messages for Claude summarization prompt
- */
 export function formatMessagesForSummary(messages: Message[]): string {
   const formatted: string[] = [];
 
   for (const msg of messages) {
     if (msg.role === "user") {
       const content = typeof msg.content === "string" ? msg.content : "[complex]";
-      // Try to extract just the message body, skip envelope if present
       const bodyMatch = content.match(/\] (.+)/s);
       const body = bodyMatch ? bodyMatch[1] : content;
       formatted.push(`User: ${body}`);
@@ -112,7 +99,6 @@ export function formatMessagesForSummary(messages: Message[]): string {
         const text = textBlocks.map((b) => b.text).join("\n");
         formatted.push(`Assistant: ${text}`);
       }
-      // Note tool calls metadata without full details
       const toolCalls = content.filter((b) => b.type === "toolCall");
       if (toolCalls.length > 0) {
         const toolNames = toolCalls.map((b: any) => b.name).join(", ");
@@ -128,22 +114,21 @@ export function formatMessagesForSummary(messages: Message[]): string {
 }
 
 /**
- * Check if a message is too large to summarize safely
- * Messages > 50% of context window cannot be summarized
+ * Check if a message is too large to summarize (>50% of context window).
  */
 export function isOversizedForSummary(message: Message, contextWindow: number): boolean {
   const content = extractMessageContent(message);
   const tokens = estimateMessageTokens(content);
-  return tokens > contextWindow * 0.5;
+  return tokens > contextWindow * OVERSIZED_MESSAGE_RATIO;
 }
 
 /**
- * Compute adaptive chunk ratio based on average message size
- * Reduces chunk size when messages are large to avoid exceeding limits
+ * Compute adaptive chunk ratio based on average message size.
+ * Reduces chunk size when messages are large.
  */
 export function computeAdaptiveChunkRatio(messages: Message[], contextWindow: number): number {
-  const BASE_CHUNK_RATIO = 0.4;
-  const MIN_CHUNK_RATIO = 0.15;
+  const BASE_CHUNK_RATIO = ADAPTIVE_CHUNK_RATIO_BASE;
+  const MIN_CHUNK_RATIO = ADAPTIVE_CHUNK_RATIO_MIN;
 
   if (messages.length === 0) {
     return BASE_CHUNK_RATIO;
@@ -158,8 +143,7 @@ export function computeAdaptiveChunkRatio(messages: Message[], contextWindow: nu
   const avgTokens = totalTokens / messages.length;
   const avgRatio = avgTokens / contextWindow;
 
-  // If average message is > 10% of context, reduce chunk ratio
-  if (avgRatio > 0.1) {
+  if (avgRatio > ADAPTIVE_CHUNK_RATIO_TRIGGER) {
     const reduction = Math.min(avgRatio * 2, BASE_CHUNK_RATIO - MIN_CHUNK_RATIO);
     return Math.max(MIN_CHUNK_RATIO, BASE_CHUNK_RATIO - reduction);
   }
@@ -168,8 +152,7 @@ export function computeAdaptiveChunkRatio(messages: Message[], contextWindow: nu
 }
 
 /**
- * Summarize messages using LLM API via pi-ai
- * Uses the utility model for cost-effective summarization
+ * Summarize messages using the utility model via pi-ai.
  */
 export async function summarizeViaClaude(params: {
   messages: Message[];
@@ -181,16 +164,13 @@ export async function summarizeViaClaude(params: {
 }): Promise<string> {
   const provider = params.provider || "anthropic";
   const model = getUtilityModel(provider, params.utilityModel);
-  const maxTokens = params.maxSummaryTokens ?? 1000;
-
-  // Format messages for summarization
+  const maxTokens = params.maxSummaryTokens ?? DEFAULT_SUMMARY_FALLBACK_TOKENS;
   const formatted = formatMessagesForSummary(params.messages);
 
   if (!formatted.trim()) {
     return "No conversation content to summarize.";
   }
 
-  // Build summarization prompt
   const defaultInstructions = `Summarize this conversation concisely. Focus on:
 - Key decisions made
 - Action items and TODOs
@@ -205,7 +185,6 @@ Be specific but concise. Preserve critical information.`;
     : defaultInstructions;
 
   try {
-    // Create context for pi-ai
     const context: Context = {
       messages: [
         {
@@ -216,13 +195,11 @@ Be specific but concise. Preserve critical information.`;
       ],
     };
 
-    // Call LLM via pi-ai
     const response = await complete(model, context, {
       apiKey: params.apiKey,
       maxTokens,
     });
 
-    // Extract text from response
     const textContent = response.content.find((block) => block.type === "text");
     const summary = textContent?.type === "text" ? textContent.text : "";
     return summary.trim() || "Unable to generate summary.";
@@ -235,8 +212,8 @@ Be specific but concise. Preserve critical information.`;
 }
 
 /**
- * Summarize messages with intelligent chunking
- * Splits large conversations into chunks, summarizes each, then merges
+ * Summarize messages with intelligent chunking.
+ * Splits large conversations, summarizes each chunk, then merges results.
  */
 export async function summarizeInChunks(params: {
   messages: Message[];
@@ -259,7 +236,6 @@ export async function summarizeInChunks(params: {
 
   console.log(`📊 Splitting into ${chunks.length} chunks for summarization`);
 
-  // Single chunk - direct summarization
   if (chunks.length === 1) {
     const summary = await summarizeViaClaude({
       messages: chunks[0],
@@ -277,7 +253,6 @@ export async function summarizeInChunks(params: {
     };
   }
 
-  // Multiple chunks - summarize each then merge
   const partialSummaries: string[] = [];
 
   for (let i = 0; i < chunks.length; i++) {
@@ -286,7 +261,9 @@ export async function summarizeInChunks(params: {
     const partial = await summarizeViaClaude({
       messages: chunks[i],
       apiKey: params.apiKey,
-      maxSummaryTokens: Math.floor((params.maxSummaryTokens ?? 1000) / 2), // Half tokens per partial
+      maxSummaryTokens: Math.floor(
+        (params.maxSummaryTokens ?? DEFAULT_SUMMARY_FALLBACK_TOKENS) / 2
+      ),
       customInstructions: params.customInstructions,
       provider: params.provider,
       utilityModel: params.utilityModel,
@@ -295,7 +272,6 @@ export async function summarizeInChunks(params: {
     partialSummaries.push(partial);
   }
 
-  // Merge partial summaries
   console.log(`  🔗 Merging ${partialSummaries.length} partial summaries`);
 
   const provider = params.provider || "anthropic";
@@ -318,7 +294,7 @@ ${partialSummaries.map((s, i) => `Part ${i + 1}:\n${s}`).join("\n\n---\n\n")}`,
 
   const mergeResponse = await complete(model, mergeContext, {
     apiKey: params.apiKey,
-    maxTokens: params.maxSummaryTokens ?? 1000,
+    maxTokens: params.maxSummaryTokens ?? DEFAULT_SUMMARY_FALLBACK_TOKENS,
   });
 
   const textContent = mergeResponse.content.find((block) => block.type === "text");
@@ -332,8 +308,8 @@ ${partialSummaries.map((s, i) => `Part ${i + 1}:\n${s}`).join("\n\n---\n\n")}`,
 }
 
 /**
- * Summarize with progressive fallback for robustness
- * Handles oversized messages and API failures gracefully
+ * Summarize with progressive fallback for robustness.
+ * Handles oversized messages and API failures gracefully.
  */
 export async function summarizeWithFallback(params: {
   messages: Message[];
@@ -352,7 +328,6 @@ export async function summarizeWithFallback(params: {
     };
   }
 
-  // Compute adaptive chunk size based on message sizes
   const chunkRatio = computeAdaptiveChunkRatio(params.messages, params.contextWindow);
   const maxChunkTokens = Math.floor(params.contextWindow * chunkRatio);
 
@@ -360,7 +335,6 @@ export async function summarizeWithFallback(params: {
     `🧠 AI Summarization: ${params.messages.length} messages, chunk ratio: ${(chunkRatio * 100).toFixed(0)}%`
   );
 
-  // Strategy 1: Try full summarization
   try {
     return await summarizeInChunks({
       messages: params.messages,
@@ -377,7 +351,6 @@ export async function summarizeWithFallback(params: {
     );
   }
 
-  // Strategy 2: Fallback - Skip oversized messages
   const smallMessages: Message[] = [];
   const oversizedNotes: string[] = [];
 
@@ -422,7 +395,6 @@ export async function summarizeWithFallback(params: {
     }
   }
 
-  // Strategy 3: Final fallback - Descriptive note
   const note =
     `Context contained ${params.messages.length} messages ` +
     `(${oversizedNotes.length} were oversized). ` +

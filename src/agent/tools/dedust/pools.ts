@@ -2,10 +2,6 @@ import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { DEDUST_API_URL } from "./constants.js";
 import { fetchWithTimeout } from "../../../utils/fetch.js";
-
-/**
- * Parameters for dedust_pools tool
- */
 interface DedustPoolsParams {
   jetton_address?: string;
   pool_type?: "volatile" | "stable";
@@ -42,14 +38,11 @@ interface DedustPoolResponse {
     fees24h?: string;
   };
 }
-
-/**
- * Tool definition for dedust_pools
- */
 export const dedustPoolsTool: Tool = {
   name: "dedust_pools",
   description:
     "List liquidity pools on DeDust DEX. Can filter by jetton address or pool type. Shows reserves, fees, and trading volume.",
+  category: "data-bearing",
   parameters: Type.Object({
     jetton_address: Type.Optional(
       Type.String({
@@ -71,10 +64,6 @@ export const dedustPoolsTool: Tool = {
     ),
   }),
 };
-
-/**
- * Executor for dedust_pools tool
- */
 export const dedustPoolsExecutor: ToolExecutor<DedustPoolsParams> = async (
   params,
   context

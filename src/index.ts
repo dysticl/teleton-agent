@@ -13,19 +13,16 @@ import { TELEGRAM_CONNECTION_RETRIES, TELEGRAM_FLOOD_SLEEP_THRESHOLD } from "./c
 import { join } from "path";
 import { ToolRegistry } from "./agent/tools/registry.js";
 import { registerAllTools } from "./agent/tools/register-all.js";
-import { loadEnhancedPlugins } from "./agent/tools/plugin-loader.js";
+import { loadEnhancedPlugins, type PluginModuleWithHooks } from "./agent/tools/plugin-loader.js";
 import type { SDKDependencies } from "./sdk/index.js";
 import { getProviderMetadata, type SupportedProvider } from "./config/providers.js";
 import { loadModules } from "./agent/tools/module-loader.js";
 import { ModulePermissions } from "./agent/tools/module-permissions.js";
 import { SHUTDOWN_TIMEOUT_MS } from "./constants/timeouts.js";
 import type { PluginModule, PluginContext } from "./agent/tools/types.js";
-import { getMarketService } from "./market/module.js";
+import { PluginWatcher } from "./agent/tools/plugin-watcher.js";
 
-/**
- * Main Tonnet application
- */
-export class TonnetApp {
+export class TeletonApp {
   private config;
   private agent: AgentRuntime;
   private bridge: TelegramBridge;
@@ -38,27 +35,23 @@ export class TonnetApp {
   private modules: PluginModule[] = [];
   private memory: MemorySystem;
   private sdkDeps: SDKDependencies;
+  private webuiServer: any = null; // WebUIServer, imported lazily
+  private pluginWatcher: PluginWatcher | null = null;
 
   constructor(configPath?: string) {
-    // Load configuration
     this.config = loadConfig(configPath);
 
-    // Set TonAPI key if configured
     if (this.config.tonapi_key) {
       setTonapiKey(this.config.tonapi_key);
     }
 
-    // Load soul/personality
     const soul = loadSoul();
 
-    // Create tool registry and register all tools
     this.toolRegistry = new ToolRegistry();
     registerAllTools(this.toolRegistry);
 
-    // Initialize agent with tools (tool count updated after module loading below)
     this.agent = new AgentRuntime(this.config, soul, this.toolRegistry);
 
-    // Initialize Telegram bridge with config
     this.bridge = new TelegramBridge({
       apiId: this.config.telegram.api_id,
       apiHash: this.config.telegram.api_hash,
@@ -69,12 +62,11 @@ export class TonnetApp {
       floodSleepThreshold: TELEGRAM_FLOOD_SLEEP_THRESHOLD,
     });
 
-    // Get memory components (local embeddings — no API key needed)
     this.memory = initializeMemory({
       database: {
         path: join(TELETON_ROOT, "memory.db"),
         enableVectorSearch: true,
-        vectorDimensions: 384, // all-MiniLM-L6-v2
+        vectorDimensions: 384,
       },
       embeddings: {
         provider: "local",
@@ -85,20 +77,14 @@ export class TonnetApp {
 
     const db = getDatabase().getDb();
 
-    // SDK dependencies (shared by built-in plugins and external plugins)
     this.sdkDeps = { bridge: this.bridge };
 
-    // Load built-in plugin modules (deals, market)
     this.modules = loadModules(this.toolRegistry, this.config, db);
 
-    // Initialize per-group module permissions
     const modulePermissions = new ModulePermissions(db);
     this.toolRegistry.setPermissions(modulePermissions);
 
     this.toolCount = this.toolRegistry.count;
-
-    // Initialize handlers with memory stores
-    // Market service is created by market module's configure() during loadModules above
     this.messageHandler = new MessageHandler(
       this.bridge,
       this.config.telegram,
@@ -106,8 +92,7 @@ export class TonnetApp {
       db,
       this.memory.embedder,
       getDatabase().isVectorSearchReady(),
-      getMarketService(),
-      this.config // Pass full config for vision tool API key access
+      this.config
     );
 
     this.adminHandler = new AdminHandler(
@@ -138,36 +123,26 @@ ${blue}  ┌──────────────────────�
   └────────────────────────────────────────────────────────────────── DEV: ZKPROOF.T.ME ──┘${reset}
 `);
 
-    // Log loaded modules
-    for (const mod of this.modules) {
-      const toolCount = mod.tools(this.config).length;
-      if (toolCount > 0) {
-        console.log(`🔌 Module "${mod.name}" v${mod.version}: ${toolCount} tools`);
-      }
-    }
+    // Load modules
+    const moduleNames = this.modules
+      .filter((m) => m.tools(this.config).length > 0)
+      .map((m) => m.name);
 
     // Load enhanced plugins from ~/.teleton/plugins/
     const builtinNames = this.modules.map((m) => m.name);
     const externalModules = await loadEnhancedPlugins(this.config, builtinNames, this.sdkDeps);
     let pluginToolCount = 0;
+    const pluginNames: string[] = [];
     for (const mod of externalModules) {
       try {
         mod.configure?.(this.config);
         mod.migrate?.(getDatabase().getDb());
         const tools = mod.tools(this.config);
-        for (const { tool, executor, scope } of tools) {
-          if (!this.toolRegistry.has(tool.name)) {
-            this.toolRegistry.register(tool, executor, scope);
-            pluginToolCount++;
-          }
+        if (tools.length > 0) {
+          pluginToolCount += this.toolRegistry.registerPluginTools(mod.name, tools);
+          pluginNames.push(mod.name);
         }
         this.modules.push(mod);
-        const toolCount = tools.length;
-        if (toolCount > 0) {
-          console.log(
-            `🔌 Plugin "${mod.name}" v${mod.version}: ${toolCount} tool${toolCount > 1 ? "s" : ""}`
-          );
-        }
       } catch (error) {
         console.error(
           `❌ Plugin "${mod.name}" failed to load:`,
@@ -179,11 +154,15 @@ ${blue}  ┌──────────────────────�
       this.toolCount = this.toolRegistry.count;
     }
 
+    // Initialize tool config from database
+    this.toolRegistry.loadConfigFromDB(getDatabase().getDb());
+
     // Provider info and tool limit check
     const provider = (this.config.agent.provider || "anthropic") as SupportedProvider;
     const providerMeta = getProviderMetadata(provider);
+    const allNames = [...moduleNames, ...pluginNames];
     console.log(
-      `✅ ${this.toolCount} tools loaded${pluginToolCount > 0 ? ` (${pluginToolCount} from plugins)` : ""}`
+      `🔌 ${this.toolCount} tools loaded (${allNames.join(", ")})${pluginToolCount > 0 ? ` — ${pluginToolCount} from plugins` : ""}`
     );
     if (providerMeta.toolLimit !== null && this.toolCount > providerMeta.toolLimit) {
       console.warn(
@@ -233,8 +212,38 @@ ${blue}  ┌──────────────────────�
       db: moduleDb,
       config: this.config,
     };
-    for (const mod of this.modules) {
-      await mod.start?.(pluginContext);
+    const startedModules: typeof this.modules = [];
+    try {
+      for (const mod of this.modules) {
+        await mod.start?.(pluginContext);
+        startedModules.push(mod);
+      }
+    } catch (error) {
+      console.error("❌ Module start failed, cleaning up started modules:", error);
+      for (const mod of startedModules.reverse()) {
+        try {
+          await mod.stop?.();
+        } catch (e) {
+          console.error(`⚠️ Module "${mod.name}" cleanup failed:`, e);
+        }
+      }
+      throw error;
+    }
+
+    // Collect plugin event hooks and wire them up
+    this.wirePluginEventHooks();
+
+    // Start plugin hot-reload watcher (dev mode)
+    if (this.config.dev.hot_reload) {
+      this.pluginWatcher = new PluginWatcher({
+        config: this.config,
+        registry: this.toolRegistry,
+        sdkDeps: this.sdkDeps,
+        modules: this.modules,
+        pluginContext,
+        loadedModuleNames: builtinNames,
+      });
+      this.pluginWatcher.start();
     }
 
     // Display startup summary
@@ -256,6 +265,27 @@ ${blue}  ┌──────────────────────�
     );
 
     console.log("Teleton Agent is running! Press Ctrl+C to stop.\n");
+
+    // Start WebUI server if enabled
+    if (this.config.webui.enabled) {
+      try {
+        const { WebUIServer } = await import("./webui/server.js");
+        this.webuiServer = new WebUIServer({
+          agent: this.agent,
+          bridge: this.bridge,
+          memory: this.memory,
+          toolRegistry: this.toolRegistry,
+          plugins: this.modules
+            .filter((m) => this.toolRegistry.isPluginModule(m.name))
+            .map((m) => ({ name: m.name, version: m.version ?? "0.0.0" })),
+          config: this.config.webui,
+        });
+        await this.webuiServer.start();
+      } catch (error) {
+        console.error("❌ Failed to start WebUI server:", error);
+        console.warn("⚠️ Continuing without WebUI...");
+      }
+    }
 
     // Initialize message debouncer with bypass logic
     this.debouncer = new MessageDebouncer(
@@ -418,6 +448,12 @@ ${blue}  ┌──────────────────────�
         return;
       }
 
+      // Skip cancelled tasks (e.g. cancelled via WebUI or admin)
+      if (task.status === "cancelled" || task.status === "done" || task.status === "failed") {
+        console.log(`⏭️ Task ${taskId} already ${task.status}, skipping`);
+        return;
+      }
+
       // Check if all dependencies are satisfied
       if (!taskStore.canExecute(taskId)) {
         console.warn(`Task ${taskId} cannot execute yet - dependencies not satisfied`);
@@ -442,7 +478,6 @@ ${blue}  ┌──────────────────────�
         chatId: message.chatId,
         isGroup: message.isGroup,
         senderId: message.senderId,
-        marketService: getMarketService() ?? undefined,
         config: this.config,
       };
 
@@ -515,23 +550,145 @@ ${blue}  ┌──────────────────────�
   }
 
   /**
+   * Collect plugin onMessage/onCallbackQuery hooks and register them
+   */
+  private wirePluginEventHooks(): void {
+    const messageHooks: Array<
+      (e: import("@teleton-agent/sdk").PluginMessageEvent) => Promise<void>
+    > = [];
+    const callbackHooks: Array<{
+      pluginName: string;
+      hook: (e: import("@teleton-agent/sdk").PluginCallbackEvent) => Promise<void>;
+    }> = [];
+
+    for (const mod of this.modules) {
+      const withHooks = mod as PluginModuleWithHooks;
+      if (withHooks.onMessage) {
+        messageHooks.push(withHooks.onMessage);
+      }
+      if (withHooks.onCallbackQuery) {
+        callbackHooks.push({ pluginName: mod.name, hook: withHooks.onCallbackQuery });
+      }
+    }
+
+    // Pass message hooks to the handler
+    if (messageHooks.length > 0) {
+      this.messageHandler.setPluginMessageHooks(messageHooks);
+      console.log(`🔗 ${messageHooks.length} plugin onMessage hook(s) registered`);
+    }
+
+    // Register callback query handler if any plugins have onCallbackQuery
+    if (callbackHooks.length > 0) {
+      this.bridge.getClient().addCallbackQueryHandler(async (update: any) => {
+        const queryId = update.queryId;
+        const data = update.data?.toString() || "";
+        const parts = data.split(":");
+        const action = parts[0];
+        const params = parts.slice(1);
+
+        const chatId =
+          update.peer?.channelId?.toString() ??
+          update.peer?.chatId?.toString() ??
+          update.peer?.userId?.toString() ??
+          "";
+        const messageId = update.msgId || 0;
+        const userId = Number(update.userId);
+
+        const answer = async (text?: string, alert = false): Promise<void> => {
+          try {
+            await this.bridge.getClient().answerCallbackQuery(queryId, { message: text, alert });
+          } catch (err) {
+            console.error(
+              "❌ Failed to answer callback query:",
+              err instanceof Error ? err.message : err
+            );
+          }
+        };
+
+        const event: import("@teleton-agent/sdk").PluginCallbackEvent = {
+          data,
+          action,
+          params,
+          chatId,
+          messageId,
+          userId,
+          answer,
+        };
+
+        for (const { pluginName, hook } of callbackHooks) {
+          try {
+            await hook(event);
+          } catch (err) {
+            console.error(
+              `❌ [${pluginName}] onCallbackQuery error:`,
+              err instanceof Error ? err.message : err
+            );
+          }
+        }
+      });
+      console.log(`🔗 ${callbackHooks.length} plugin onCallbackQuery hook(s) registered`);
+    }
+  }
+
+  /**
    * Stop the agent
    */
   async stop(): Promise<void> {
-    console.log("\n👋 Stopping Tonnet AI...");
+    console.log("\n👋 Stopping Teleton AI...");
 
-    // Flush any pending debounced messages
+    // Stop WebUI server first (if running)
+    if (this.webuiServer) {
+      try {
+        await this.webuiServer.stop();
+      } catch (e) {
+        console.error("⚠️ WebUI stop failed:", e);
+      }
+    }
+
+    // Stop plugin watcher first
+    if (this.pluginWatcher) {
+      try {
+        await this.pluginWatcher.stop();
+      } catch (e) {
+        console.error("⚠️ Plugin watcher stop failed:", e);
+      }
+    }
+
+    // Each step is isolated so a failure in one doesn't skip the rest
     if (this.debouncer) {
-      await this.debouncer.flushAll();
+      try {
+        await this.debouncer.flushAll();
+      } catch (e) {
+        console.error("⚠️ Debouncer flush failed:", e);
+      }
     }
 
-    // Stop module background jobs (deals bot/poller/expiry, market service, etc.)
+    // Drain in-flight message processing before disconnecting
+    try {
+      await this.messageHandler.drain();
+    } catch (e) {
+      console.error("⚠️ Message queue drain failed:", e);
+    }
+
     for (const mod of this.modules) {
-      await mod.stop?.();
+      try {
+        await mod.stop?.();
+      } catch (e) {
+        console.error(`⚠️ Module "${mod.name}" stop failed:`, e);
+      }
     }
 
-    await this.bridge.disconnect();
-    closeDatabase();
+    try {
+      await this.bridge.disconnect();
+    } catch (e) {
+      console.error("⚠️ Bridge disconnect failed:", e);
+    }
+
+    try {
+      closeDatabase();
+    } catch (e) {
+      console.error("⚠️ Database close failed:", e);
+    }
   }
 }
 
@@ -539,9 +696,9 @@ ${blue}  ┌──────────────────────�
  * Start the application
  */
 export async function main(configPath?: string): Promise<void> {
-  let app: TonnetApp;
+  let app: TeletonApp;
   try {
-    app = new TonnetApp(configPath);
+    app = new TeletonApp(configPath);
   } catch (error) {
     console.error("Failed to initialize:", error instanceof Error ? error.message : error);
     process.exit(1);

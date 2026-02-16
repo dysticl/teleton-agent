@@ -7,10 +7,6 @@ import { StonApiClient } from "@ston-fi/api";
 import { Factory, Asset, PoolType, ReadinessStatus } from "@dedust/sdk";
 import { DEDUST_FACTORY_MAINNET, NATIVE_TON_ADDRESS } from "../dedust/constants.js";
 import { getDecimals, toUnits, fromUnits } from "../dedust/asset-cache.js";
-
-/**
- * Parameters for dex_quote tool
- */
 interface DexQuoteParams {
   from_asset: string;
   to_asset: string;
@@ -32,14 +28,11 @@ interface DexQuoteResult {
   available: boolean;
   error?: string;
 }
-
-/**
- * Tool definition for dex_quote
- */
 export const dexQuoteTool: Tool = {
   name: "dex_quote",
   description:
     "Smart router that compares quotes from STON.fi and DeDust DEX to find the best price. Returns comparison table with expected outputs, fees, and recommends the best DEX for your swap. Use 'ton' for TON or jetton master address.",
+  category: "data-bearing",
   parameters: Type.Object({
     from_asset: Type.String({
       description: "Source asset: 'ton' for TON, or jetton master address (EQ... format)",
@@ -222,10 +215,6 @@ async function getDedustQuote(
     };
   }
 }
-
-/**
- * Executor for dex_quote tool
- */
 export const dexQuoteExecutor: ToolExecutor<DexQuoteParams> = async (
   params,
   context
@@ -237,7 +226,6 @@ export const dexQuoteExecutor: ToolExecutor<DexQuoteParams> = async (
     const endpoint = await getCachedHttpEndpoint();
     const tonClient = new TonClient({ endpoint });
 
-    // Fetch quotes in parallel
     const [stonfiQuote, dedustQuote] = await Promise.all([
       getStonfiQuote(from_asset, to_asset, amount, slippage),
       getDedustQuote(from_asset, to_asset, amount, slippage, tonClient),
@@ -283,7 +271,6 @@ export const dexQuoteExecutor: ToolExecutor<DexQuoteParams> = async (
     const fromSymbol = isTonInput ? "TON" : "Token";
     const toSymbol = isTonOutput ? "TON" : "Token";
 
-    // Build comparison table
     const comparison = {
       stonfi: {
         available: stonfiQuote.available,
@@ -305,7 +292,6 @@ export const dexQuoteExecutor: ToolExecutor<DexQuoteParams> = async (
       },
     };
 
-    // Build message
     let message = `DEX Comparison: ${amount} ${fromSymbol} -> ${toSymbol}\n\n`;
     message += `| DEX      | Output       | Rate          | Fee       |\n`;
     message += `|----------|--------------|---------------|-----------|\n`;

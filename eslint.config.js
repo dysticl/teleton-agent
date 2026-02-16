@@ -3,7 +3,7 @@ import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
-    ignores: ["node_modules/**", "dist/**", ".reference/**", "openclaw/**", "docker/**"],
+    ignores: ["node_modules/**", "dist/**", ".reference/**", "docker/**"],
   },
   {
     files: ["src/**/*.ts"],
@@ -12,7 +12,7 @@ export default [
       parserOptions: {
         ecmaVersion: "latest",
         sourceType: "module",
-        project: "./tsconfig.json",
+        project: ["./tsconfig.json", "./tsconfig.test.json"],
       },
     },
     plugins: {

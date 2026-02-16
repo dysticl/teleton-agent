@@ -1,21 +1,14 @@
 import { Type } from "@sinclair/typebox";
 import type { Tool, ToolExecutor, ToolResult } from "../types.js";
 import { tonapiFetch } from "../../../constants/api-endpoints.js";
-
-/**
- * Parameters for dns_check tool
- */
 interface DnsCheckParams {
   domain: string;
 }
-
-/**
- * Tool definition for dns_check
- */
 export const dnsCheckTool: Tool = {
   name: "dns_check",
   description:
     "Check if a .ton domain is available, in auction, or already owned. Returns status with relevant details (price estimates, current bids, owner info).",
+  category: "data-bearing",
   parameters: Type.Object({
     domain: Type.String({
       description: "Domain name to check (with or without .ton extension)",
@@ -32,10 +25,6 @@ function estimateMinPrice(length: number): string {
   if (length >= 6 && length <= 10) return "~5-10 TON";
   return "~1 TON";
 }
-
-/**
- * Executor for dns_check tool
- */
 export const dnsCheckExecutor: ToolExecutor<DnsCheckParams> = async (
   params,
   context
