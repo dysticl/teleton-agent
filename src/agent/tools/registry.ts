@@ -165,7 +165,7 @@ export class ToolRegistry {
 
       return result;
     } catch (error) {
-      console.error(`Error executing tool ${toolCall.name}:`, error);
+      console.error(`❌ Error executing tool ${toolCall.name}:`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),

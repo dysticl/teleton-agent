@@ -20,9 +20,9 @@ import { tools as webTools } from "./web/index.js";
 const ALL_CATEGORIES: ToolEntry[][] = [
   telegramTools,
   tonTools,
-  dnsTools,
+  // dnsTools,    // Disabled: 7 tools (tonapi plugin covers DNS)
   stonfiTools,
-  dedustTools,
+  // dedustTools, // Disabled: 5 tools (STONfi + geckoterminal cover DEX)
   journalTools,
   workspaceTools,
   webTools,

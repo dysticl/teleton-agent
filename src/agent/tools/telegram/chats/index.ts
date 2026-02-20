@@ -29,18 +29,5 @@ export const tools: ToolEntry[] = [
   { tool: telegramGetDialogsTool, executor: telegramGetDialogsExecutor },
   { tool: telegramGetHistoryTool, executor: telegramGetHistoryExecutor },
   { tool: telegramGetChatInfoTool, executor: telegramGetChatInfoExecutor },
-  { tool: telegramMarkAsReadTool, executor: telegramMarkAsReadExecutor },
-  { tool: telegramJoinChannelTool, executor: telegramJoinChannelExecutor, scope: "dm-only" },
-  { tool: telegramLeaveChannelTool, executor: telegramLeaveChannelExecutor, scope: "dm-only" },
-  { tool: telegramCreateChannelTool, executor: telegramCreateChannelExecutor, scope: "dm-only" },
-  {
-    tool: telegramEditChannelInfoTool,
-    executor: telegramEditChannelInfoExecutor,
-    scope: "dm-only",
-  },
-  {
-    tool: telegramInviteToChannelTool,
-    executor: telegramInviteToChannelExecutor,
-    scope: "dm-only",
-  },
+  // Disabled: mark_as_read, join/leave/create/edit channel, invite (6 tools)
 ];

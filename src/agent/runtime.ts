@@ -500,6 +500,7 @@ export class AgentRuntime {
           const result = await this.toolRegistry.execute(block, fullContext);
 
           verbose(`  ${block.name}: ${result.success ? "✓" : "✗"} ${result.error || ""}`);
+          if (!result.success) console.error(`  ❌ ${block.name} FAILED:`, result.error);
           iterationToolNames.push(`${block.name} ${result.success ? "✓" : "✗"}`);
 
           totalToolCalls.push({

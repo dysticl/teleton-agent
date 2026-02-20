@@ -39,6 +39,11 @@ export * from "./tasks/index.js";
 // - Profile (3 tools)
 // - Stars & Payments (2 tools)
 // - Stories (1 tool)
+// Also trimmed within active categories:
+// - Messaging: -6 (schedule, search, pin, unpin, forward, delete)
+// - Chats: -6 (mark_as_read, join/leave/create/edit channel, invite)
+// - Groups: -5 (kick, ban, unban, create_group, set_chat_photo)
+// - Contacts: -3 (block, get_blocked, get_common_chats)
 
 export const tools: ToolEntry[] = [
   ...messagingTools,

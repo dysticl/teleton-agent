@@ -42,6 +42,105 @@
 
 ---
 
+## Für Kirill — Schnellstart-Anleitung 🚀
+
+Hey Kirill! Hier ist die Schritt-für-Schritt Anleitung, wie du den Telegram-Agenten auf deinem PC zum Laufen bringst.
+
+### Was du brauchst
+
+1. **Node.js 20+** — [nodejs.org](https://nodejs.org/) → LTS Version runterladen und installieren
+2. **Git** — [git-scm.com](https://git-scm.com/download/win) → Installer mit Standardeinstellungen
+3. **Google Gemini API Key** (kostenlos) — [aistudio.google.com](https://aistudio.google.com/) → API Key erstellen
+4. **Telegram API ID + Hash** — [my.telegram.org/apps](https://my.telegram.org/apps) → Mit dem Telegram-Account einloggen, den du für den Bot nutzen willst
+5. **Deine Telegram User-ID** — [@userinfobot](https://t.me/userinfobot) auf Telegram anschreiben, der antwortet mit deiner ID
+
+> ⚠️ **Wichtig**: Benutze einen **separaten Telegram-Account** für den Bot, nicht deinen Haupt-Account! Der Agent hat volle Kontrolle über den Account.
+
+### Einrichtung (Windows PowerShell)
+
+```powershell
+# 1. Repo klonen
+cd ~\Desktop
+git clone https://github.com/dysticl/teleton-agent.git
+cd teleton-agent
+
+# 2. Dependencies installieren
+npm install
+
+# 3. Projekt bauen
+npm run build
+
+# 4. Global installieren (damit 'teleton' als Befehl funktioniert)
+npm link
+
+# 5. Setup-Wizard starten
+teleton setup
+```
+
+Der Setup-Wizard fragt dich nach:
+- **LLM Provider** → `google` wählen
+- **API Key** → Dein Google Gemini Key (`AIza...`)
+- **Model** → `gemini-2.0-flash`
+- **Telegram API ID** → Von my.telegram.org
+- **Telegram API Hash** → Von my.telegram.org
+- **Telefonnummer** → Mit Ländervorwahl (z.B. `+49170...` oder `+7...`)
+- **Verifizierungscode** → Kommt als Telegram-Nachricht
+- **Admin User-ID** → Deine Telegram User-ID (von @userinfobot)
+
+### Plugins installieren
+
+Die Plugins sind separat und geben dem Bot extra Funktionen (Gift-Statistiken, Krypto-Preise, etc.):
+
+```powershell
+# Plugins-Repo klonen (temporär)
+cd ~\Desktop
+git clone https://github.com/TONresistor/teleton-plugins.git
+
+# Plugin-Ordner erstellen
+mkdir -Force "$HOME\.teleton\plugins"
+
+# Plugins kopieren (die wichtigsten)
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\tonapi "$HOME\.teleton\plugins\tonapi"
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\giftstat "$HOME\.teleton\plugins\giftstat"
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\crypto-prices "$HOME\.teleton\plugins\crypto-prices"
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\geckoterminal "$HOME\.teleton\plugins\geckoterminal"
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\dyor "$HOME\.teleton\plugins\dyor"
+Copy-Item -Recurse ~\Desktop\teleton-plugins\plugins\fragment "$HOME\.teleton\plugins\fragment"
+
+# Dependencies für Plugins installieren
+cd "$HOME\.teleton\plugins\tonapi" ; npm install ; cd ~\Desktop\teleton-agent
+cd "$HOME\.teleton\plugins\giftstat" ; npm install ; cd ~\Desktop\teleton-agent
+cd "$HOME\.teleton\plugins\dyor" ; npm install ; cd ~\Desktop\teleton-agent
+cd "$HOME\.teleton\plugins\geckoterminal" ; npm install ; cd ~\Desktop\teleton-agent
+```
+
+### Starten
+
+```powershell
+cd ~\Desktop\teleton-agent
+
+# Normal starten
+teleton start
+
+# Mit Web-Dashboard (empfohlen)
+teleton start --webui
+```
+
+Wenn der Bot läuft, schick ihm auf Telegram `/ping` — er sollte mit "Pong!" antworten.
+
+### Falls etwas nicht klappt
+
+| Problem | Lösung |
+|---------|--------|
+| `npm install` Fehler mit C++ | PowerShell als Admin: `npm install -g windows-build-tools` |
+| Bot antwortet nicht | `/resume` an den Bot schicken, oder `teleton start` neustarten |
+| Telegram Session abgelaufen | `del $HOME\.teleton\telegram_session.txt` und neustarten |
+| WebUI Flag unbekannt | `npm run build` nochmal ausführen |
+
+Bei Fragen einfach melden! 👋
+
+---
+
 ## Features
 
 ### Tool Categories
@@ -134,8 +233,8 @@ Before you start, you need to get a few things ready:
 3. **Clone this repository**
    ```powershell
    cd ~\Desktop
-   git clone https://github.com/dysticl/teleton-agent-1.git
-   cd teleton-agent-1
+   git clone https://github.com/dysticl/teleton-agent.git
+   cd teleton-agent
    ```
 
 4. **Install dependencies**
@@ -176,8 +275,8 @@ Before you start, you need to get a few things ready:
 
 ```bash
 # 1. Clone
-git clone https://github.com/dysticl/teleton-agent-1.git
-cd teleton-agent-1
+git clone https://github.com/dysticl/teleton-agent.git
+cd teleton-agent
 
 # 2. Install + build
 npm install && npm run build
@@ -718,8 +817,8 @@ teleton doctor
 ### Setup
 
 ```bash
-git clone https://github.com/dysticl/teleton-agent-1.git
-cd teleton-agent-1
+git clone https://github.com/dysticl/teleton-agent.git
+cd teleton-agent
 npm install
 npm run build
 npm link
@@ -910,7 +1009,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **This fork**: [GitHub Issues](https://github.com/dysticl/teleton-agent-1/issues)
+- **This fork**: [GitHub Issues](https://github.com/dysticl/teleton-agent/issues)
 - **Upstream**: [TONresistor/teleton-agent](https://github.com/TONresistor/teleton-agent)
 - **Upstream Channel**: [@ResistanceTools](https://t.me/ResistanceTools)
 - **Upstream Group Chat**: [@ResistanceForum](https://t.me/ResistanceForum)

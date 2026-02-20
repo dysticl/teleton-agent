@@ -35,16 +35,12 @@ export const tools: ToolEntry[] = [
   { tool: tonSendTool, executor: tonSendExecutor, scope: "dm-only" },
   { tool: tonGetAddressTool, executor: tonGetAddressExecutor },
   { tool: tonGetBalanceTool, executor: tonGetBalanceExecutor },
-  { tool: tonPriceTool, executor: tonPriceExecutor },
   { tool: tonGetTransactionsTool, executor: tonGetTransactionsExecutor },
   { tool: tonMyTransactionsTool, executor: tonMyTransactionsExecutor },
-  { tool: tonChartTool, executor: tonChartExecutor },
-  { tool: nftListTool, executor: nftListExecutor },
   { tool: jettonSendTool, executor: jettonSendExecutor, scope: "dm-only" },
   { tool: jettonBalancesTool, executor: jettonBalancesExecutor },
   { tool: jettonInfoTool, executor: jettonInfoExecutor },
   { tool: jettonPriceTool, executor: jettonPriceExecutor },
-  { tool: jettonHoldersTool, executor: jettonHoldersExecutor },
-  { tool: jettonHistoryTool, executor: jettonHistoryExecutor },
-  { tool: dexQuoteTool, executor: dexQuoteExecutor },
+  // Disabled: tonPrice, tonChart, nftList, jettonHolders, jettonHistory, dexQuote (6 tools)
+  // Covered by crypto-prices, geckoterminal, tonapi plugins
 ];

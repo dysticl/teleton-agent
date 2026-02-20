@@ -37,10 +37,5 @@ export const tools: ToolEntry[] = [
   { tool: telegramQuoteReplyTool, executor: telegramQuoteReplyExecutor },
   { tool: telegramGetRepliesTool, executor: telegramGetRepliesExecutor },
   { tool: telegramEditMessageTool, executor: telegramEditMessageExecutor },
-  { tool: telegramScheduleMessageTool, executor: telegramScheduleMessageExecutor },
-  { tool: telegramSearchMessagesTool, executor: telegramSearchMessagesExecutor },
-  { tool: telegramPinMessageTool, executor: telegramPinMessageExecutor },
-  { tool: telegramUnpinMessageTool, executor: telegramUnpinMessageExecutor },
-  { tool: telegramForwardMessageTool, executor: telegramForwardMessageExecutor },
-  { tool: telegramDeleteMessageTool, executor: telegramDeleteMessageExecutor },
+  // Disabled: schedule, search, pin, unpin, forward, delete (6 tools)
 ];

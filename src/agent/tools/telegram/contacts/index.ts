@@ -12,9 +12,7 @@ export { telegramGetUserInfoTool, telegramGetUserInfoExecutor };
 export { telegramCheckUsernameTool, telegramCheckUsernameExecutor };
 
 export const tools: ToolEntry[] = [
-  { tool: telegramBlockUserTool, executor: telegramBlockUserExecutor, scope: "dm-only" },
-  { tool: telegramGetBlockedTool, executor: telegramGetBlockedExecutor, scope: "dm-only" },
-  { tool: telegramGetCommonChatsTool, executor: telegramGetCommonChatsExecutor },
   { tool: telegramGetUserInfoTool, executor: telegramGetUserInfoExecutor },
   { tool: telegramCheckUsernameTool, executor: telegramCheckUsernameExecutor },
+  // Disabled: block, get_blocked, get_common_chats (3 tools)
 ];
